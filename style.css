@@ -1,0 +1,112 @@
+@import "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css";
+
+/* Custom animations & safe overrides for dark mode mobile dashboard */
+html,
+body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden !important;
+    background: #0f172a; /* slate-900 */
+    color: #f1f5f9;      /* slate-100 */
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    touch-action: manipulation;
+}
+
+/* Ensure single viewport: no scrollbars anywhere */
+body > * {
+    overflow: hidden !important;
+}
+
+main {
+    height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    min-height: 100vh;
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: row;
+}
+
+header {
+    flex-shrink: 0 !important;
+    z-index: 40;
+}
+
+#left-workspace,
+#wyn-reserve-area {
+    height: 100%;
+    overflow: hidden !important;
+    flex-shrink: 0;
+}
+
+#left-workspace {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+/* Right reserve area: standard Wyn slider spacing */
+#wyn-reserve-area {
+    border-left: 1px dashed rgba(148, 163, 184, 0.3);
+}
+
+input[type="range"] {
+    accent-color: #10b981;
+}
+
+/* Custom scrollbar for modals */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #020617;
+}
+::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+}
+
+/* Professional dark mode enhancements */
+.bg-slate-950 {
+    background-color: #020617 !important;
+}
+.bg-slate-900 {
+    background-color: #0f172a !important;
+}
+.bg-slate-800 {
+    background-color: #1e293b !important;
+}
+
+/* Large speed typography for drivers */
+.text-5xl { font-size: 3.75rem; line-height: 1; }
+.text-6xl { font-size: 4.5rem; line-height: 1; }
+.text-3xl { font-size: 2.25rem; line-height: 1.1; }
+
+/* Settings modal full height control */
+#settings-modal {
+    overflow: hidden !important;
+}
+#settings-modal > div {
+    max-height: 90vh;
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+}
+#settings-modal .overflow-y-auto {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
+/* Safe area insets for mobile */
+.p-4 {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}

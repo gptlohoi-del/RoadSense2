@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="color-scheme" content="dark">
+    <title>RoadSense</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="stylesheet" href="./style.css">
+    <meta name="theme-color" content="#0f172a">
+</head>
+<body class="overflow-hidden bg-slate-950 text-slate-200">
+<!-- Top Status Bar -->
+<header class="flex justify-between items-center px-4 py-2 bg-slate-900 border-b border-slate-800 shrink-0">
+    <div class="flex items-center space-x-3">
+        <span id="gps-status" class="flex items-center text-xs px-2.5 py-1 rounded-full bg-red-950 text-red-400 border border-red-800 font-medium">
+            <span class="w-2 h-2 rounded-full bg-red-500 mr-1.5 animate-pulse"></span>GPS: Mất sóng
+        </span>
+        <button id="mode-badge" class="text-xs px-3 py-1 rounded-full bg-blue-950 text-blue-300 border border-blue-800 font-semibold active:scale-95 transition-transform" title="Chạm để đổi mức thận trọng">
+            Mức: Cân bằng
+        </button>
+    </div>
+    <div class="flex items-center space-x-2">
+        <button id="btn-sync" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium border border-slate-700 flex items-center">
+            ☁️ Sync GitHub
+        </button>
+        <button id="btn-settings" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium border border-slate-700">
+            ⚙️ Cài đặt
+        </button>
+    </div>
+</header>
+
+<!-- Main Workspace -->
+<main class="flex-1 flex relative overflow-hidden">
+    
+    <!-- Left Side: RoadSense Core Interface (Takes ~55-60% width) -->
+    <section id="left-workspace" class="flex-1 flex flex-col justify-between p-4 relative z-10">
+        
+        <!-- Large Warning Banner & Metrics -->
+        <div id="warning-card" class="bg-slate-900/90 backdrop-blur border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col items-center justify-center text-center relative overflow-hidden transition-colors duration-300">
+            
+            <!-- Icon & Distance Countdown -->
+            <div class="flex items-center justify-center space-x-3 mb-2">
+                <div id="warning-icon" class="text-3xl p-2 bg-slate-800 rounded-xl border border-slate-700 shadow-inner">
+                    🛣️
+                </div>
+                <div class="text-left">
+                    <div id="countdown-text" class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Khoảng cách</div>
+                    <div id="countdown-value" class="text-xl font-bold text-amber-400">--- m</div>
+                </div>
+            </div>
+
+            <!-- Recommended Speed & Current Speed Grid -->
+            <div class="grid grid-cols-2 gap-4 w-full mt-2 pt-3 border-t border-slate-800/80">
+                <div class="flex flex-col items-center">
+                    <span class="text-xs text-slate-400 uppercase font-medium">Khuyên dùng</span>
+                    <div class="flex items-baseline">
+                        <span id="rec-speed" class="text-5xl font-black text-emerald-400 tracking-tight">--</span>
+                        <span class="text-xs text-emerald-500 ml-1 font-bold">km/h</span>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center border-l border-slate-800/80">
+                    <span class="text-xs text-slate-400 uppercase font-medium">Thực tế</span>
+                    <div class="flex items-baseline">
+                        <span id="curr-speed" class="text-3xl font-bold text-slate-200 tracking-tight">--</span>
+                        <span class="text-xs text-slate-400 ml-1">km/h</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Road / Sensor Status Details -->
+        <div class="my-2 bg-slate-900/50 backdrop-blur border border-slate-800/60 rounded-xl p-3 text-xs flex justify-around text-slate-300">
+            <div>Độ xóc: <span id="vibration-score" class="font-bold text-slate-100">0.0g</span></div>
+            <div>Bán kính cua R: <span id="curve-radius" class="font-bold text-slate-100">-- m</span></div>
+            <div>Trạng thái: <span id="app-state" class="font-bold text-emerald-400">Sẵn sàng</span></div>
+        </div>
+
+        <!-- Bottom Control Buttons -->
+        <div class="grid grid-cols-2 gap-3 pb-2">
+            <button id="btn-record" class="py-4 px-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all rounded-xl font-bold text-white shadow-lg shadow-emerald-900/30 border border-emerald-500 flex flex-col items-center justify-center">
+                <span class="text-lg">⏺ BẮT ĐẦU GHI</span>
+                <span id="record-subtext" class="text-[10px] text-emerald-100 font-normal mt-0.5">Chế độ thu thập dữ liệu</span>
+            </button>
+            <button id="btn-calibrate" class="py-4 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all rounded-xl font-bold text-slate-200 shadow-lg border border-slate-700 flex flex-col items-center justify-center">
+                <span class="text-lg">⚖️ CÂN BẰNG</span>
+                <span class="text-[10px] text-slate-400 font-normal mt-0.5">Hiệu chỉnh hướng đặt máy</span>
+            </button>
+        </div>
+    </section>
+
+    <!-- Right Side: Reserved Area for Wyn Floating App -->
+    <section id="wyn-reserve-area" class="h-full relative pointer-events-none flex flex-col items-center justify-start pt-4 border-l border-dashed border-slate-800/40">
+        <div class="bg-slate-900/30 text-slate-600 text-[10px] uppercase font-semibold px-2 py-1 rounded border border-slate-800 pointer-events-auto text-center">
+            Khu vực Wyn Floating App<br>(Cạnh phải)
+        </div>
+    </section>
+</main>
+
+<!-- Settings Modal -->
+<div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+            <h2 class="font-bold text-base text-slate-100">⚙️ Cài đặt hệ thống RoadSense</h2>
+            <button id="close-settings" class="text-slate-400 hover:text-white p-1 text-lg">✕</button>
+        </div>
+        
+        <div class="p-5 overflow-y-auto space-y-4 text-sm flex-1">
+            <!-- Layout Setting -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Độ rộng khu vực Wyn (Cạnh phải)</label>
+                <div class="flex items-center space-x-3">
+                    <input type="range" id="setting-wyn-width" min="30" max="60" value="43" class="w-full accent-emerald-500">
+                    <span id="wyn-width-val" class="font-mono text-emerald-400 text-xs w-12 text-right">43%</span>
+                </div>
+            </div>
+
+            <!-- Font size setting -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Cỡ chữ vận tốc khuyến nghị</label>
+                <select id="setting-font-size" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200">
+                    <option value="text-4xl">Nhỏ (4xl)</option>
+                    <option value="text-5xl" selected>Vừa (5xl)</option>
+                    <option value="text-6xl">Lớn (6xl)</option>
+                </select>
+            </div>
+
+            <!-- Countdown distance setting -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Khoảng cách đếm ngược cảnh báo tối đa (mét)</label>
+                <input type="number" id="setting-countdown-dist" value="150" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200">
+            </div>
+
+            <!-- Calibration delay -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Thời gian delay nút Cân bằng (giây)</label>
+                <input type="number" step="0.1" id="setting-calib-delay" value="0.5" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200">
+            </div>
+
+            <!-- Voice alert interval -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Khoảng nghỉ giọng nói cảnh báo liên tục (giây)</label>
+                <input type="number" step="0.5" id="setting-voice-interval" value="2.0" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200">
+            </div>
+
+            <!-- GitHub Repo Sync Config -->
+            <div class="space-y-1.5 pt-2 border-t border-slate-800">
+                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">GitHub Repository (Owner/Repo)</label>
+                <input type="text" id="setting-gh-repo" placeholder="username/roadsense-data" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs font-mono">
+            </div>
+            <div class="space-y-1.5">
+                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">GitHub Personal Access Token (PAT)</label>
+                <input type="password" id="setting-gh-token" placeholder="ghp_xxxxxxxxxxxx" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs font-mono">
+            </div>
+        </div>
+
+        <div class="px-5 py-3 border-t border-slate-800 bg-slate-950 flex justify-end space-x-3">
+            <button id="save-settings" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-semibold text-xs text-white">Lưu cấu hình</button>
+        </div>
+    </div>
+</div>
+
+<!-- GitHub Sync Modal -->
+<div id="sync-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">
+        <h2 class="font-bold text-base text-slate-100">☁️ Đồng bộ dữ liệu GitHub</h2>
+        <p class="text-xs text-slate-400">Tải các chuyến đi đã ghi lên GitHub Repository của bạn hoặc tải dữ liệu đường mới nhất về máy.</p>
+        <div id="sync-status-box" class="p-3 bg-slate-950 rounded-lg font-mono text-xs text-slate-300 border border-slate-800 min-h-[80px] max-h-[150px] overflow-y-auto">
+            Sẵn sàng đồng bộ...
+        </div>
+        <div class="flex justify-end space-x-2 pt-2">
+            <button id="close-sync" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium">Đóng</button>
+            <button id="btn-start-upload" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-semibold text-white">Upload chuyến đi lên GitHub</button>
+        </div>
+    </div>
+</div>
+
+<!-- Core Scripts -->
+<script src="script.js"></script>
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('ServiceWorker registered with scope:', reg.scope))
+                .catch(err => console.error('ServiceWorker registration failed:', err));
+        });
+    }
+</script>
+</body>
+</html>
