@@ -1,192 +1,151 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <meta name="color-scheme" content="dark">
-    <title>RoadSense</title>
-    <link rel="manifest" href="./manifest.json">
-    <link rel="stylesheet" href="./style.css">
-    <meta name="theme-color" content="#0f172a">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c1425" id="browser-theme-color">
+  <meta name="description" content="RoadSense: thử nghiệm theo dõi GPS, cảm biến và ghi lại hành trình trên thiết bị.">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icons/icon-192.png" type="image/png">
+  <link rel="stylesheet" href="./style.css">
+  <title>RoadSense • One View</title>
+  <script src="./script.js" defer></script>
 </head>
-<body class="overflow-hidden bg-slate-950 text-slate-200">
-<!-- Top Status Bar -->
-<header class="flex justify-between items-center px-4 py-2 bg-slate-900 border-b border-slate-800 shrink-0">
-    <div class="flex items-center space-x-3">
-        <span id="gps-status" class="flex items-center text-xs px-2.5 py-1 rounded-full bg-red-950 text-red-400 border border-red-800 font-medium">
-            <span class="w-2 h-2 rounded-full bg-red-500 mr-1.5 animate-pulse"></span>GPS: Mất sóng
-        </span>
-        <button id="mode-badge" class="text-xs px-3 py-1 rounded-full bg-blue-950 text-blue-300 border border-blue-800 font-semibold active:scale-95 transition-transform" title="Chạm để đổi mức thận trọng">
-            Mức: Cân bằng
+<body>
+  <div id="app" class="app">
+    <header class="topbar">
+      <div class="brand" aria-label="RoadSense">
+        <span class="brand-mark" aria-hidden="true">◈</span>
+        <span class="brand-name">RoadSense</span>
+      </div>
+      <div class="top-actions">
+        <button id="btn-gps" class="gps-chip" type="button" title="Chạm để yêu cầu GPS" aria-label="Kết nối GPS">
+          <span id="gps-dot" class="status-dot waiting" aria-hidden="true"></span>
+          <span id="gps-status">Chờ GPS</span>
         </button>
+        <button id="btn-theme" class="icon-btn" type="button" title="Đổi giao diện sáng hoặc tối" aria-label="Đổi giao diện sáng tối">☾</button>
+        <button id="btn-sync" class="icon-btn" type="button" title="Xuất dữ liệu hoặc tải lên GitHub" aria-label="Dữ liệu và GitHub">⇪</button>
+        <button id="btn-settings" class="icon-btn" type="button" title="Cài đặt" aria-label="Mở cài đặt">⚙</button>
+      </div>
+    </header>
+
+    <main id="dashboard" class="dashboard" aria-label="Bảng điều khiển RoadSense">
+      <section class="hero card" aria-label="Tốc độ">
+        <div class="hero-heading">
+          <span class="eyebrow">PHÂN TÍCH THỬ NGHIỆM</span>
+          <button id="mode-badge" class="mode-badge" type="button" title="Đổi chế độ thận trọng">Cân bằng ▾</button>
+        </div>
+        <div class="speed-grid">
+          <div class="speed-block primary-speed">
+            <span class="speed-label">Mức gợi ý tham khảo</span>
+            <div class="speed-number"><strong id="rec-speed">50</strong><span class="unit">km/h</span></div>
+            <span id="rec-reason" class="speed-context">Theo mức cấu hình</span>
+          </div>
+          <div class="speed-block actual-speed">
+            <span class="speed-label">Tốc độ GPS</span>
+            <div class="speed-number"><strong id="curr-speed">--</strong><span class="unit">km/h</span></div>
+            <span id="gps-accuracy-hint" class="speed-context">Chưa có tọa độ</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="Chỉ số theo dõi">
+        <div class="metric card">
+          <span class="metric-label">ĐỘ XÓC ƯỚC TÍNH</span>
+          <div class="metric-value"><strong id="vibration-score">--</strong><span>g</span></div>
+          <span id="sensor-state" class="metric-hint">Chưa có cảm biến</span>
+        </div>
+        <div class="metric card">
+          <span class="metric-label">BÁN KÍNH CUA</span>
+          <div class="metric-value"><strong id="curve-radius">--</strong><span>m</span></div>
+          <span class="metric-hint">Ước tính từ GPS</span>
+        </div>
+        <div class="metric card">
+          <span class="metric-label">ĐIỂM XÓC PHÍA TRƯỚC</span>
+          <div class="metric-value"><strong id="countdown-value">--</strong><span>m</span></div>
+          <span class="metric-hint">Từ lịch sử đã lưu</span>
+        </div>
+        <div class="metric card">
+          <span class="metric-label">QUÃNG ĐƯỜNG GHI</span>
+          <div class="metric-value"><strong id="trip-distance">0.00</strong><span>km</span></div>
+          <span id="trip-count" class="metric-hint">Chưa ghi hành trình</span>
+        </div>
+      </section>
+
+      <section id="alert-panel" class="notice card" role="status" aria-live="polite">
+        <div class="notice-icon" aria-hidden="true">ⓘ</div>
+        <div class="notice-copy">
+          <strong id="alert-title">Sẵn sàng khởi động</strong>
+          <span id="alert-detail">Chạm GPS để kiểm tra quyền truy cập vị trí.</span>
+        </div>
+      </section>
+
+      <div class="buttons-row">
+        <button id="btn-record" class="action-btn record-btn" type="button"><span id="record-label">● BẮT ĐẦU GHI</span><small id="record-subtext">Lưu hành trình trên máy</small></button>
+        <button id="btn-calibrate" class="action-btn calibrate-btn" type="button"><span>⊕ CÂN BẰNG</span><small id="calibrate-subtext">Hiệu chỉnh cảm biến</small></button>
+      </div>
+      <p class="safety-note">⚠ Không thay thế biển báo, giới hạn tốc độ hoặc phán đoán của người lái.</p>
+    </main>
+  </div>
+
+  <div id="settings-modal" class="overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-header"><h2 id="settings-title">⚙ Cài đặt thử nghiệm</h2><button id="close-settings" class="icon-btn close-btn" type="button" aria-label="Đóng cài đặt">✕</button></div>
+      <form id="settings-form" class="modal-form">
+        <div class="modal-scroll">
+          <p class="helper">Các giá trị là tham số thử nghiệm, không phải giới hạn tốc độ pháp lý. Thay đổi được lưu trên thiết bị này.</p>
+          <fieldset><legend>Giao diện</legend>
+            <label class="field"><span>Giao diện màu</span><select id="setting-theme"><option value="auto">Theo hệ thống</option><option value="dark">Tối</option><option value="light">Sáng</option></select></label>
+            <label class="field"><span>Cỡ số tốc độ gợi ý</span><select id="setting-font-size"><option value="normal">Vừa</option><option value="large">Lớn</option><option value="extra">Rất lớn</option></select></label>
+            <label class="field"><span>Thu phóng nội dung (80–115%)</span><input id="setting-ui-scale" type="range" min="80" max="115" step="5"><output id="setting-ui-scale-val" for="setting-ui-scale">100%</output></label>
+          </fieldset>
+          <fieldset><legend>Tốc độ & đường</legend>
+            <label class="field"><span>Chế độ</span><select id="setting-mode"><option value="comfort">Thoải mái</option><option value="balanced">Cân bằng</option><option value="sport">Thể thao</option></select></label>
+            <label class="field"><span>Tốc độ tham chiếu (km/h)</span><input id="setting-base-speed" type="number" min="10" max="120" step="1"></label>
+            <label class="field"><span>Tốc độ tối thiểu thử nghiệm (km/h)</span><input id="setting-min-speed" type="number" min="5" max="70" step="1"></label>
+            <label class="field"><span>Trần tốc độ thử nghiệm (km/h)</span><input id="setting-max-speed" type="number" min="20" max="130" step="1"></label>
+            <label class="field"><span>Gia tốc ngang giới hạn cho tính cua (m/s²)</span><input id="setting-lateral-accel" type="number" min="0.6" max="3.5" step="0.1"></label>
+            <label class="field"><span>Ngưỡng ghi nhận xóc (g)</span><input id="setting-vibration-threshold" type="number" min="0.1" max="2" step="0.05"></label>
+            <label class="field"><span>Mức giảm khi đường xóc (km/h)</span><input id="setting-vibration-penalty" type="number" min="0" max="40" step="1"></label>
+            <label class="field"><span>Khoảng cách cảnh báo điểm đã ghi (m)</span><input id="setting-warning-radius" type="number" min="30" max="1000" step="10"></label>
+            <label class="check-row"><input id="setting-remember-bumps" type="checkbox"> <span>Ghi nhớ điểm xóc khi đang ghi hành trình</span></label>
+          </fieldset>
+          <fieldset><legend>GPS & bộ lọc</legend>
+            <label class="check-row"><input id="setting-high-accuracy" type="checkbox"> <span>Yêu cầu GPS độ chính xác cao (hao pin hơn)</span></label>
+            <label class="field"><span>Thời gian chờ GPS (giây)</span><input id="setting-gps-timeout" type="number" min="5" max="60" step="1"></label>
+            <label class="field"><span>Độ tuổi tọa độ cho phép (giây)</span><input id="setting-gps-max-age" type="number" min="0" max="30" step="1"></label>
+            <label class="field"><span>Sai số GPS tối đa (m)</span><input id="setting-gps-max-accuracy" type="number" min="10" max="300" step="5"></label>
+            <label class="field"><span>Độ nhạy làm mượt vận tốc (0.1–1)</span><input id="setting-speed-smoothing" type="number" min="0.1" max="1" step="0.05"></label>
+            <label class="field"><span>Độ nhạy làm mượt dao động (0.05–1)</span><input id="setting-vibration-smoothing" type="number" min="0.05" max="1" step="0.05"></label>
+            <label class="field"><span>Thời gian lấy mẫu cân bằng (giây)</span><input id="setting-calib-delay" type="number" min="0.3" max="5" step="0.1"></label>
+            <p id="gps-diagnostics" class="diagnostics">GPS: chưa kiểm tra.</p>
+            <button id="btn-request-motion" class="secondary-btn" type="button">Yêu cầu quyền cảm biến (iPhone)</button>
+          </fieldset>
+          <fieldset><legend>Cảnh báo bằng giọng nói</legend>
+            <label class="check-row"><input id="setting-voice-enabled" type="checkbox"> <span>Bật nhắc bằng giọng nói khi phát hiện rủi ro</span></label>
+            <label class="field"><span>Khoảng nghỉ giữa 2 cảnh báo (giây)</span><input id="setting-voice-interval" type="number" min="5" max="90" step="1"></label>
+            <label class="field"><span>Tốc độ đọc (0.7–1.5)</span><input id="setting-voice-rate" type="number" min="0.7" max="1.5" step="0.1"></label>
+            <label class="field"><span>Biên độ vượt mức gợi ý (km/h)</span><input id="setting-voice-margin" type="number" min="0" max="30" step="1"></label>
+          </fieldset>
+        </div>
+        <div class="modal-footer"><button id="btn-reset-settings" class="secondary-btn" type="button">Mặc định</button><button id="save-settings" class="primary-btn" type="submit">Lưu cấu hình</button></div>
+      </form>
     </div>
-    <div class="flex items-center space-x-2">
-        <button id="btn-sync" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium border border-slate-700 flex items-center">
-            ☁️ Sync GitHub
-        </button>
-        <button id="btn-settings" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium border border-slate-700">
-            ⚙️ Cài đặt
-        </button>
+  </div>
+
+  <div id="sync-modal" class="overlay" hidden>
+    <div class="modal narrow" role="dialog" aria-modal="true" aria-labelledby="sync-title">
+      <div class="modal-header"><h2 id="sync-title">⇪ Dữ liệu hành trình</h2><button id="close-sync" class="icon-btn close-btn" type="button" aria-label="Đóng dữ liệu">✕</button></div>
+      <div class="modal-scroll sync-body">
+        <p class="helper">Dữ liệu GPS có thể tiết lộ lộ trình di chuyển. Chỉ tải lên kho GitHub mà bạn tin cậy; ưu tiên kho riêng tư.</p>
+        <button id="btn-export" class="secondary-btn full" type="button">↓ Xuất JSON xuống thiết bị</button>
+        <label class="field"><span>GitHub repository (chủ tài khoản/tên kho)</span><input id="setting-gh-repo" type="text" placeholder="username/roadsense-data" autocomplete="off"></label>
+        <label class="field"><span>Fine-grained token có quyền Contents: Read and write</span><input id="session-gh-token" type="password" placeholder="Nhập mỗi khi tải lên" autocomplete="off" spellcheck="false"></label>
+        <p class="helper">Token chỉ giữ trong phiên hiển thị, không ghi vào localStorage hoặc file xuất.</p>
+        <button id="btn-start-upload" class="primary-btn full" type="button">Tải dữ liệu thật lên GitHub</button>
+        <p id="sync-status-box" class="diagnostics" role="status" aria-live="polite">Chưa có tác vụ đồng bộ.</p>
+      </div>
     </div>
-</header>
-
-<!-- Main Workspace -->
-<main class="flex-1 flex relative overflow-hidden">
-    
-    <!-- Left Side: RoadSense Core Interface (Takes ~55-60% width) -->
-    <section id="left-workspace" class="w-full flex flex-col justify-between p-4 relative z-10">
-        
-        <!-- Large Warning Banner & Metrics -->
-        <div id="warning-card" class="bg-slate-900/90 backdrop-blur border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col items-center justify-center text-center relative overflow-hidden transition-colors duration-300">
-            
-            <!-- Icon & Distance Countdown -->
-            <div class="flex items-center justify-center space-x-3 mb-2">
-                <div id="warning-icon" class="text-3xl p-2 bg-slate-800 rounded-xl border border-slate-700 shadow-inner">
-                    🛣️
-                </div>
-                <div class="text-left">
-                    <div id="countdown-text" class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Khoảng cách</div>
-                    <div id="countdown-value" class="text-xl font-bold text-amber-400">--- m</div>
-                </div>
-            </div>
-
-            <!-- Recommended Speed & Current Speed Grid -->
-            <div class="grid grid-cols-2 gap-4 w-full mt-2 pt-3 border-t border-slate-800/80">
-                <div class="flex flex-col items-center">
-                    <span class="text-xs text-slate-400 uppercase font-medium">Khuyên dùng</span>
-                    <div class="flex items-baseline">
-                        <span id="rec-speed" class="text-5xl font-black text-emerald-400 tracking-tight">--</span>
-                        <span class="text-xs text-emerald-500 ml-1 font-bold">km/h</span>
-                    </div>
-                </div>
-                <div class="flex flex-col items-center border-l border-slate-800/80">
-                    <span class="text-xs text-slate-400 uppercase font-medium">Thực tế</span>
-                    <div class="flex items-baseline">
-                        <span id="curr-speed" class="text-3xl font-bold text-slate-200 tracking-tight">--</span>
-                        <span class="text-xs text-slate-400 ml-1">km/h</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Road / Sensor Status Details -->
-        <div class="my-2 bg-slate-900/50 backdrop-blur border border-slate-800/60 rounded-xl p-3 text-xs flex justify-around text-slate-300">
-            <div>Độ xóc: <span id="vibration-score" class="font-bold text-slate-100">0.0g</span></div>
-            <div>Bán kính cua R: <span id="curve-radius" class="font-bold text-slate-100">-- m</span></div>
-            <div>Trạng thái: <span id="app-state" class="font-bold text-emerald-400">Sẵn sàng</span></div>
-        </div>
-
-        <!-- Bottom Control Buttons -->
-        <div class="grid grid-cols-2 gap-3 pb-2">
-            <button id="btn-record" class="py-4 px-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all rounded-xl font-bold text-white shadow-lg shadow-emerald-900/30 border border-emerald-500 flex flex-col items-center justify-center">
-                <span class="text-lg">⏺ BẮT ĐẦU GHI</span>
-                <span id="record-subtext" class="text-[10px] text-emerald-100 font-normal mt-0.5">Chế độ thu thập dữ liệu</span>
-            </button>
-            <button id="btn-calibrate" class="py-4 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all rounded-xl font-bold text-slate-200 shadow-lg border border-slate-700 flex flex-col items-center justify-center">
-                <span class="text-lg">⚖️ CÂN BẰNG</span>
-                <span class="text-[10px] text-slate-400 font-normal mt-0.5">Hiệu chỉnh hướng đặt máy</span>
-            </button>
-        </div>
-    </section>
-
-    <!-- Right Side: Reserved Area for Wyn Floating App -->
-    <!-- <section id="wyn-reserve-area" class="h-full relative pointer-events-none flex flex-col items-center justify-start pt-4 border-l border-dashed border-slate-800/40">
-        <div class="bg-slate-900/30 text-slate-600 text-[10px] uppercase font-semibold px-2 py-1 rounded border border-slate-800 pointer-events-auto text-center">
-            Khu vực Wyn Floating App<br>(Cạnh phải)
-        </div>
-    </section> -->
-
-    
-</main>
-
-<!-- Settings Modal -->
-<div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-        <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
-            <h2 class="font-bold text-base text-slate-100">⚙️ Cài đặt hệ thống RoadSense</h2>
-            <button id="close-settings" class="text-slate-400 hover:text-white p-1 text-lg">✕</button>
-        </div>
-        
-        <div class="p-5 overflow-y-auto space-y-4 text-sm flex-1">
-            <!-- Layout Setting -->
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Độ rộng khu vực Wyn (Cạnh phải)</label>
-                <div class="flex items-center space-x-3">
-                    <input type="range" id="setting-wyn-width" min="30" max="60" value="43" class="w-full accent-emerald-500">
-                    <span id="wyn-width-val" class="font-mono text-emerald-400 text-xs w-12 text-right">43%</span>
-                </div>
-            </div>
-
-            <!-- Font size setting -->
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Cỡ chữ vận tốc khuyến nghị</label>
-                <select id="setting-font-size" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200">
-                    <option value="text-4xl">Nhỏ (4xl)</option>
-                    <option value="text-5xl" selected>Vừa (5xl)</option>
-                    <option value="text-6xl">Lớn (6xl)</option>
-                </select>
-            </div>
-
-            <!-- Countdown distance setting -->
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Khoảng cách đếm ngược cảnh báo tối đa (mét)</label>
-                <input type="number" id="setting-countdown-dist" value="150" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200">
-            </div>
-
-            <!-- Calibration delay -->
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Thời gian delay nút Cân bằng (giây)</label>
-                <input type="number" step="0.1" id="setting-calib-delay" value="0.5" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200">
-            </div>
-
-            <!-- Voice alert interval -->
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Khoảng nghỉ giọng nói cảnh báo liên tục (giây)</label>
-                <input type="number" step="0.5" id="setting-voice-interval" value="2.0" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200">
-            </div>
-
-            <!-- GitHub Repo Sync Config -->
-            <div class="space-y-1.5 pt-2 border-t border-slate-800">
-                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">GitHub Repository (Owner/Repo)</label>
-                <input type="text" id="setting-gh-repo" placeholder="username/roadsense-data" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs font-mono">
-            </div>
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">GitHub Personal Access Token (PAT)</label>
-                <input type="password" id="setting-gh-token" placeholder="ghp_xxxxxxxxxxxx" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs font-mono">
-            </div>
-        </div>
-
-        <div class="px-5 py-3 border-t border-slate-800 bg-slate-950 flex justify-end space-x-3">
-            <button id="save-settings" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-semibold text-xs text-white">Lưu cấu hình</button>
-        </div>
-    </div>
-</div>
-
-<!-- GitHub Sync Modal -->
-<div id="sync-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">
-        <h2 class="font-bold text-base text-slate-100">☁️ Đồng bộ dữ liệu GitHub</h2>
-        <p class="text-xs text-slate-400">Tải các chuyến đi đã ghi lên GitHub Repository của bạn hoặc tải dữ liệu đường mới nhất về máy.</p>
-        <div id="sync-status-box" class="p-3 bg-slate-950 rounded-lg font-mono text-xs text-slate-300 border border-slate-800 min-h-[80px] max-h-[150px] overflow-y-auto">
-            Sẵn sàng đồng bộ...
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-            <button id="close-sync" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium">Đóng</button>
-            <button id="btn-start-upload" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-semibold text-white">Upload chuyến đi lên GitHub</button>
-        </div>
-    </div>
-</div>
-
-<!-- Core Scripts -->
-<script src="script.js"></script>
-<script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('ServiceWorker registered with scope:', reg.scope))
-                .catch(err => console.error('ServiceWorker registration failed:', err));
-        });
-    }
-</script>
+  </div>
 </body>
 </html>

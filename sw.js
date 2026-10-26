@@ -1,61 +1,37 @@
-const CACHE_NAME = 'roadsense-cache-v1';
-const STATIC_ASSETS = [
-'./index.html',
-'./style.css',
-'./script.js',
-'./manifest.json'
+/* RoadSense offline shell. Không cache yêu cầu GitHub hay dữ liệu API cá nhân. */
+const CACHE_NAME = 'roadsense-oneview-v3';
+const SHELL = [
+  './index.html', './style.css', './script.js', './manifest.json',
+  './icons/icon-192.png', './icons/icon-512.png'
 ];
 
-// Install: Cache essential assets
 self.addEventListener('install', event => {
-event.waitUntil(
-caches.open(CACHE_NAME).then(cache => {
-return cache.addAll(STATIC_ASSETS);
-}).then(() => self.skipWaiting())
-);
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
-
-// Activate: Clean up old caches but do not force index update checks to block execution
 self.addEventListener('activate', event => {
-event.waitUntil(
-caches.keys().then(keys => {
-return Promise.all(
-keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
-);
-}).then(() => self.clients.claim())
-);
+  event.waitUntil(caches.keys().then(keys => Promise.all(
+    keys.filter(k => k.startsWith('roadsense-') && k !== CACHE_NAME).map(k => caches.delete(k))
+  )).then(() => self.clients.claim()));
 });
-
-// Fetch: Network-First strategy
 self.addEventListener('fetch', event => {
-// Only handle GET requests
-if (event.request.method !== 'GET') return;
-
-event.respondWith(
-    fetch(event.request)
-        .then(networkResponse => {
-            // If network fetch succeeds, clone and update cache
-            if (networkResponse && networkResponse.status === 200) {
-                const responseClone = networkResponse.clone();
-                caches.open(CACHE_NAME).then(cache => {
-                    cache.put(event.request, responseClone);
-                });
-            }
-            return networkResponse;
-        })
-        .catch(() => {
-            // If offline or network fails, fallback to cache
-            return caches.match(event.request).then(cachedResponse => {
-                if (cachedResponse) {
-                    return cachedResponse;
-                }
-                // Fallback for html pages if needed
-                if (event.request.headers.get('accept').includes('text/html')) {
-                    return caches.match('./index.html');
-                }
-            });
-        })
-);
-
-
+  const request = event.request;
+  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  event.respondWith((async () => {
+    try {
+      const response = await fetch(request);
+      if (response.ok && (request.mode === 'navigate' || SHELL.some(path => new URL(path,self.registration.scope).href === request.url))) {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(request,response.clone());
+      }
+      return response;
+    } catch {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      if (request.mode === 'navigate') {
+        const offline = await caches.match(new URL('./index.html',self.registration.scope).href);
+        if (offline) return offline;
+      }
+      return Response.error();
+    }
+  })());
 });
