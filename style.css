@@ -275,3 +275,19 @@ legend { color:var(--accent); font-weight:800; font-size:13px; padding:0 7px; }
   .dashboard.expanded-zoom .buttons-row { grid-column:2; grid-row:2; }
   .dashboard.expanded-zoom .safety-note { grid-column:1 / -1; grid-row:3; }
 }
+
+/* v7 — Màu HEX tùy chỉnh chỉ áp dụng lên khung PHÂN TÍCH THỬ NGHIỆM. */
+.color-input-row { display:flex; align-items:center; gap:10px; }
+.color-input-row input { flex:1 1 auto; min-width:0; text-transform:uppercase; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.06em; }
+.color-swatch { width:41px; height:40px; flex:0 0 41px; border-radius:9px; border:2px solid var(--line); background:linear-gradient(135deg,#111d31 50%,#ffffff 50%); }
+.inline-help { display:block; font-size:11px; margin:2px 0; }
+.input-error { color:var(--error); font-size:12px; }
+.field input[aria-invalid="true"] { border-color:var(--error); }
+.hero.has-custom-color { color:var(--hero-text); border-color:var(--hero-line); }
+.hero.has-custom-color .eyebrow, .hero.has-custom-color .speed-label,
+.hero.has-custom-color .speed-context, .hero.has-custom-color .unit { color:var(--hero-muted); }
+.hero.has-custom-color .actual-speed { border-color:var(--hero-line); }
+.hero.has-custom-color .primary-speed .speed-number strong { color:var(--hero-highlight); }
+.hero.has-custom-color .actual-speed .speed-number strong { color:var(--hero-text); }
+.hero.has-custom-color .mode-option { background:var(--hero-mode-bg); border-color:var(--hero-line); color:var(--hero-text); }
+.hero.has-custom-color .mode-option[aria-pressed="true"] { background:var(--hero-highlight); border-color:var(--hero-highlight); color:var(--hero-mode-active-text); }

@@ -18,16 +18,16 @@
   const STORE_NAME = 'trips';
   const G = 9.80665;
   const DEFAULTS = Object.freeze({
-    theme: 'auto', fontSize: 'normal', recSpeedSize: 68, gpsSpeedSize: 64, uiScale: 100, mode: 'balanced',
+    theme: 'auto', heroColor: '', fontSize: 'normal', recSpeedSize: 68, gpsSpeedSize: 64, uiScale: 100, mode: 'balanced',
     baseSpeed: 50, minSpeed: 15, maxSpeed: 90, lateralAccel: 1.6,
     vibrationThreshold: 0.35, vibrationPenalty: 15, warningRadius: 150,
     rememberBumps: true, highAccuracy: true, gpsTimeout: 15,
     gpsMaxAge: 2, gpsMaxAccuracy: 70, speedSmoothing: 0.45,
     vibrationSmoothing: 0.3, calibDelay: 1.5, voiceEnabled: false,
-    voiceInterval: 12, voiceRate: 1.0, voiceMargin: 10
+    voiceInterval: 12, voiceMargin: 0, beepPitch: 850, beepVolume: 55
   });
   const FIELDS = {
-    theme: 'setting-theme', recSpeedSize: 'setting-rec-speed-size', gpsSpeedSize: 'setting-gps-speed-size', uiScale: 'setting-ui-scale',
+    theme: 'setting-theme', heroColor: 'setting-hero-color', recSpeedSize: 'setting-rec-speed-size', gpsSpeedSize: 'setting-gps-speed-size', uiScale: 'setting-ui-scale',
     mode: 'setting-mode', baseSpeed: 'setting-base-speed', minSpeed: 'setting-min-speed',
     maxSpeed: 'setting-max-speed', lateralAccel: 'setting-lateral-accel',
     vibrationThreshold: 'setting-vibration-threshold', vibrationPenalty: 'setting-vibration-penalty',
@@ -36,8 +36,8 @@
     gpsMaxAge: 'setting-gps-max-age', gpsMaxAccuracy: 'setting-gps-max-accuracy',
     speedSmoothing: 'setting-speed-smoothing', vibrationSmoothing: 'setting-vibration-smoothing',
     calibDelay: 'setting-calib-delay', voiceEnabled: 'setting-voice-enabled',
-    voiceInterval: 'setting-voice-interval', voiceRate: 'setting-voice-rate',
-    voiceMargin: 'setting-voice-margin'
+    voiceInterval: 'setting-voice-interval', voiceMargin: 'setting-voice-margin',
+    beepPitch: 'setting-beep-pitch', beepVolume: 'setting-beep-volume'
   };
   const MODES = { comfort: 'Thoải mái', balanced: 'Cân bằng', sport: 'Thể thao' };
   const $ = id => document.getElementById(id);
@@ -63,6 +63,12 @@
       } else if (typeof obj[key] === 'string') safe[key] = obj[key];
     }
     if (!['auto','dark','light'].includes(safe.theme)) safe.theme = 'auto';
+    // Màu HEX nhập bằng tay; dữ liệu v6 không có trường này được tự động đặt về màu theme.
+    if (!/^#[0-9a-f]{6}$/i.test(safe.heroColor)) safe.heroColor = '';
+    else safe.heroColor = safe.heroColor.toUpperCase();
+    // Chuyển mặc định 10 km/h của cảnh báo giọng nói cũ sang 0: vượt ngưỡng là bíp.
+    // Giữ nguyên các mức tùy chỉnh khác nếu người dùng từng nhập.
+    if (obj.beepPitch === undefined && safe.voiceMargin === 10) safe.voiceMargin = 0;
     if (!['normal','large','extra'].includes(safe.fontSize)) safe.fontSize = 'normal';
     // Chuyển cỡ số từ bản v5 (select chung) sang 2 giá trị riêng mà không mất cấu hình cũ.
     if (obj.recSpeedSize === undefined) safe.recSpeedSize = ({normal:68,large:78,extra:90})[safe.fontSize];
@@ -73,7 +79,7 @@
       lateralAccel:[0.6,3.5], vibrationThreshold:[0.1,2], vibrationPenalty:[0,40],
       warningRadius:[30,1000], gpsTimeout:[5,60], gpsMaxAge:[0,30],
       gpsMaxAccuracy:[10,300], speedSmoothing:[0.1,1], vibrationSmoothing:[0.05,1],
-      calibDelay:[1.2,5], voiceInterval:[5,90], voiceRate:[0.7,1.5], voiceMargin:[0,30]
+      calibDelay:[1.2,5], voiceInterval:[2,90], voiceMargin:[0,30], beepPitch:[400,1400], beepVolume:[10,100]
     };
     for (const [key, [min,max]] of Object.entries(constraints)) safe[key] = clamp(safe[key], min, max);
     if (safe.minSpeed > safe.maxSpeed) safe.minSpeed = safe.maxSpeed;
@@ -93,9 +99,10 @@
     calibrationText: '', lastCalibrationAt: 0, gpsIntervals: [], lastGpsTimestamp: null,
     lastDashboardRenderAt: 0, isRecording: false, activeTrip: null, db: null,
     wakeLock: null, nearestEvent: null, recommended: settings.baseSpeed,
-    recReason: 'Theo mức cấu hình', lastVoiceAt: 0, lastBumpAt: 0,
+    recReason: 'Theo mức cấu hình', lastBumpAt: 0,
     uploadBusy: false, recordBusy:false, lastNotice: '', renderPending: false,
-    lastMotionRecordAt:0, lastAutoSyncAt:Date.now(), archiveReady:false
+    lastMotionRecordAt:0, lastAutoSyncAt:Date.now(), archiveReady:false,
+    beepAudio:null, beepOscillators:new Set(), nextBeepAllowedAt:0
   };
 
   function fillForm(source) {
@@ -107,6 +114,8 @@
     $('setting-ui-scale-val').textContent = `${source.uiScale}%`;
     $('setting-rec-speed-size-val').textContent = `${source.recSpeedSize} px`;
     $('setting-gps-speed-size-val').textContent = `${source.gpsSpeedSize} px`;
+    $('setting-beep-volume-val').textContent = `${source.beepVolume}%`;
+    previewHeroSwatch();
   }
   function readForm() {
     const value = {};
@@ -121,9 +130,38 @@
     return settings.theme === 'auto' ?
       (window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : settings.theme;
   }
+  function heroHexValid(raw) {
+    return raw === '' || /^#[0-9a-f]{6}$/i.test(raw);
+  }
+  function previewHeroSwatch() {
+    const color = $('setting-hero-color').value.trim();
+    const el = $('hero-color-swatch');
+    el.style.background = /^#[0-9a-f]{6}$/i.test(color) ? color : 'linear-gradient(135deg, #111d31 50%, #ffffff 50%)';
+    $('hero-color-error').hidden = heroHexValid(color);
+    $('setting-hero-color').setAttribute('aria-invalid', String(!heroHexValid(color)));
+  }
+  function isLightColor(hex) {
+    const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i+2), 16) / 255);
+    const linear = rgb.map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
+    return .2126 * linear[0] + .7152 * linear[1] + .0722 * linear[2] > .24;
+  }
+  function applyHeroColor() {
+    const hero = $('analysis-panel');
+    const custom = settings.heroColor;
+    hero.classList.toggle('has-custom-color', Boolean(custom));
+    hero.style.backgroundColor = custom || '';
+    const light = custom && isLightColor(custom);
+    hero.style.setProperty('--hero-text', light ? '#102238' : '#f4f8ff');
+    hero.style.setProperty('--hero-muted', light ? '#263e4f' : '#e0e8f4');
+    hero.style.setProperty('--hero-highlight', light ? '#004d36' : '#74ffbf');
+    hero.style.setProperty('--hero-mode-active-text', light ? '#ffffff' : '#072515');
+    hero.style.setProperty('--hero-line', light ? 'rgba(0,0,0,.23)' : 'rgba(255,255,255,.30)');
+    hero.style.setProperty('--hero-mode-bg', light ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.12)');
+  }
   function applyAppearance() {
     const theme = resolvedTheme();
     document.documentElement.dataset.theme = theme;
+    applyHeroColor();
     const factor = settings.uiScale / 100;
     document.documentElement.style.setProperty('--ui-scale', String(factor));
     document.documentElement.style.setProperty('--rec-speed-font', `${Math.round(settings.recSpeedSize * factor)}px`);
@@ -162,6 +200,8 @@
       `\nTrang bảo mật: ${window.isSecureContext ? 'Có (HTTPS/localhost)' : 'Không — GPS thường bị trình duyệt khóa'}`;
   }
   function setGps(status, msg, accuracy = null) {
+    // Khi mất GPS hoặc sai số quá lớn, dừng ngay âm báo để tránh cảnh báo lỗi thời.
+    if (status !== 'ok' && state.beepOscillators.size) stopBeepSequence();
     state.gpsState = status;
     state.gpsMessage = msg;
     state.gpsAccuracy = accuracy;
@@ -283,7 +323,7 @@
       trip.gpsCount++; // Bản gốc GPS được lưu đầy đủ trong kho v5; không giới hạn 15.000 mẫu.
     }
     state.nearestEvent = findUpcomingEvent();
-    maybeSpeak();
+    maybeBeep();
     scheduleRender();
   }
   function findUpcomingEvent() {
@@ -419,46 +459,94 @@
     state.recommended = Math.round(clamp(speed,settings.minSpeed,settings.maxSpeed));
     state.recReason = reason;
   }
-  function voiceMessage() {
-    return `Chú ý. Tốc độ tham khảo ${Math.round(state.recommended)} ki lô mét một giờ.`;
+  // Web Audio API: 4 bíp, mỗi bíp 105 ms và cách nhau 105 ms.
+  // Không dùng speechSynthesis vì đọc cả câu gây trễ trên điện thoại.
+  const BEEP_COUNT = 4, BEEP_ON_S = .105, BEEP_GAP_S = .105;
+  const BEEP_DURATION_MS = ((BEEP_COUNT-1)*(BEEP_ON_S+BEEP_GAP_S)+BEEP_ON_S)*1000;
+  function audioContext() {
+    if (!state.beepAudio) {
+      const Audio = window.AudioContext || window.webkitAudioContext;
+      if (!Audio) return null;
+      try { state.beepAudio = new Audio(); } catch { return null; }
+    }
+    return state.beepAudio;
   }
-  function previewVoice() {
+  function unlockAudioFromGesture() {
+    // Gọi trực tiếp ở sự kiện click, trước mọi await; iOS chặn autoplay từ timer.
+    const ctx = audioContext();
+    if (!ctx) return Promise.reject(new Error('Trình duyệt không hỗ trợ Web Audio.'));
+    if (ctx.state === 'running') return Promise.resolve(ctx);
+    return ctx.resume().then(() => {
+      if (ctx.state !== 'running') throw new Error('Âm thanh chưa được phép phát.');
+      return ctx;
+    });
+  }
+  function stopBeepSequence() {
+    for (const osc of state.beepOscillators) {
+      try { osc.stop(); } catch { /* oscillator đã dừng */ }
+    }
+    state.beepOscillators.clear();
+  }
+  function playBeepSequence(ctx, pitch, volumePercent) {
+    if (ctx.state !== 'running') return false;
+    stopBeepSequence();
+    const start = ctx.currentTime + .015;
+    const gainLevel = .20 * clamp(volumePercent,10,100)/100;
+    for (let i=0; i<BEEP_COUNT; i++) {
+      const t = start+i*(BEEP_ON_S+BEEP_GAP_S);
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(clamp(pitch,400,1400),t);
+      gain.gain.setValueAtTime(0,t);
+      gain.gain.linearRampToValueAtTime(gainLevel,t+.008);
+      gain.gain.setValueAtTime(gainLevel,t+BEEP_ON_S-.018);
+      gain.gain.linearRampToValueAtTime(0,t+BEEP_ON_S);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      state.beepOscillators.add(osc);
+      osc.onended = () => {
+        state.beepOscillators.delete(osc);
+        osc.disconnect();
+        gain.disconnect();
+      };
+      osc.start(t);
+      osc.stop(t+BEEP_ON_S+.004);
+    }
+    return true;
+  }
+  async function previewBeep() {
     const status = $('voice-preview-status');
-    if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
-      status.textContent = 'Trình duyệt này không hỗ trợ đọc văn bản thành tiếng.';
+    const pitch = clamp(Number($('setting-beep-pitch').value) || 850,400,1400);
+    const volume = clamp(Number($('setting-beep-volume').value) || 55,10,100);
+    try {
+      const ctx = await unlockAudioFromGesture();
+      if (!playBeepSequence(ctx,pitch,volume)) throw new Error('Trình duyệt chưa bật âm thanh.');
+      // Tránh phát đồng thời cảnh báo thật ngay sau khi nghe thử.
+      state.nextBeepAllowedAt = Date.now() + BEEP_DURATION_MS + settings.voiceInterval*1000;
+      status.textContent = `Đã phát thử 4 tiếng bíp, ${pitch} Hz · âm lượng ${volume}%.`;
+    } catch (err) {
+      status.textContent = `Chưa phát được tiếng bíp: ${err.message} Hãy thử chạm lại và kiểm tra âm lượng máy.`;
+    }
+  }
+  function maybeBeep() {
+    calculateRecommendation();
+    const now = Date.now();
+    // Không phát nếu chưa ghi, GPS không mới, thiếu vận tốc, hoặc không vượt ngưỡng.
+    const valid = settings.voiceEnabled && state.isRecording && state.gpsState === 'ok' &&
+      finite(state.speed) && now-state.lastGoodAt <= 10000 &&
+      state.speed > state.recommended + settings.voiceMargin;
+    if (!valid) {
+      if (state.beepOscillators.size) stopBeepSequence();
+      state.nextBeepAllowedAt = 0; // Nếu bắt đầu vượt ngưỡng lần nữa, cảnh báo ngay.
       return;
     }
-    calculateRecommendation();
-    const rate = clamp(Number($('setting-voice-rate').value) || 1, 0.7, 1.5);
-    const utterance = new SpeechSynthesisUtterance(voiceMessage());
-    utterance.lang = 'vi-VN';
-    utterance.rate = rate;
-    const vietnameseVoice = window.speechSynthesis.getVoices().find(v => /^vi([-_]|$)/i.test(v.lang));
-    if (vietnameseVoice) utterance.voice = vietnameseVoice;
-    status.textContent = 'Đang yêu cầu phát giọng nói…';
-    utterance.onstart = () => { status.textContent = `Đang nghe thử giọng Việt · tốc độ ${rate.toFixed(1)}×`; };
-    utterance.onend = () => { status.textContent = 'Đã kết thúc bản nghe thử.'; };
-    utterance.onerror = e => {
-      if (e.error !== 'canceled' && e.error !== 'interrupted') status.textContent = `Không phát được giọng nói (${e.error || 'không rõ'}). Kiểm tra âm lượng và giọng đọc trên máy.`;
-    };
-    try {
-      window.speechSynthesis.cancel();
-      // Phải gọi trực tiếp trong tương tác chạm để Safari/Chrome cho phép phát.
-      window.speechSynthesis.speak(utterance);
-    } catch (err) { status.textContent = `Không phát được: ${err.message}`; }
-  }
-  function maybeSpeak() {
-    calculateRecommendation();
-    const hazard = state.nearestEvent || state.recReason !== 'Mức tham chiếu cài đặt';
-    if (!settings.voiceEnabled || !hazard || !state.isRecording || state.gpsState !== 'ok' ||
-        state.speed === null || state.speed < state.recommended + settings.voiceMargin ||
-        Date.now()-state.lastVoiceAt < settings.voiceInterval*1000 || !('speechSynthesis' in window)) return;
-    state.lastVoiceAt = Date.now();
-    const utterance = new SpeechSynthesisUtterance(voiceMessage());
-    utterance.lang = 'vi-VN';
-    utterance.rate = settings.voiceRate;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    if (now < state.nextBeepAllowedAt) return;
+    const ctx = state.beepAudio;
+    // Không cố tự mở quyền phát từ timer: điện thoại chỉ cho phép sau thao tác của người dùng.
+    if (!ctx || ctx.state !== 'running') return;
+    if (playBeepSequence(ctx,settings.beepPitch,settings.beepVolume))
+      state.nextBeepAllowedAt = now+BEEP_DURATION_MS+settings.voiceInterval*1000;
   }
 
   function render() {
@@ -574,6 +662,7 @@
         // iOS permission prompt MUST be initiated synchronously from user's click.
         // Calling requestMotionAccess after awaiting IndexedDB loses user activation.
         if(state.calibrationStatus!=='ready') requestMotionAccess().catch(()=>{});
+        if(settings.voiceEnabled) void unlockAudioFromGesture().catch(()=>{});
         // Start only after a durable session record is committed to IndexedDB.
         await ARCHIVE.start(settings,{
           userAgent:navigator.userAgent,language:navigator.language,
@@ -596,6 +685,7 @@
       } else {
         // Disable new samples, then seal the last local chunk without losing existing data.
         state.isRecording=false;
+        stopBeepSequence(); state.nextBeepAllowedAt=0;
         await ARCHIVE.stop();
         $('record-label').textContent='● BẮT ĐẦU GHI';
         $('record-subtext').textContent='Lưu hành trình trên máy';
@@ -707,12 +797,24 @@
     $('setting-ui-scale').addEventListener('input',e=>{ $('setting-ui-scale-val').textContent=`${e.target.value}%`; });
     $('setting-rec-speed-size').addEventListener('input',e=>{ $('setting-rec-speed-size-val').textContent=`${e.target.value} px`; });
     $('setting-gps-speed-size').addEventListener('input',e=>{ $('setting-gps-speed-size-val').textContent=`${e.target.value} px`; });
-    $('btn-voice-preview').addEventListener('click',previewVoice);
+    $('setting-hero-color').addEventListener('input',previewHeroSwatch);
+    $('setting-beep-volume').addEventListener('input',e=>{ $('setting-beep-volume-val').textContent=`${e.target.value}%`; });
+    $('btn-voice-preview').addEventListener('click',previewBeep);
     $('btn-reset-settings').addEventListener('click',()=>fillForm(DEFAULTS));
     $('settings-form').addEventListener('submit',e=>{
       e.preventDefault();
+      const input = $('setting-hero-color');
+      input.value = input.value.trim();
+      if (!heroHexValid(input.value)) {
+        previewHeroSwatch();
+        input.focus();
+        input.reportValidity();
+        return;
+      }
       const priorGPS=JSON.stringify([settings.highAccuracy,settings.gpsTimeout,settings.gpsMaxAge,settings.gpsMaxAccuracy]);
       settings=readForm();
+      if (!settings.voiceEnabled) { stopBeepSequence(); state.nextBeepAllowedAt=0; }
+      else void unlockAudioFromGesture().catch(()=>{});
       writeJSON(SETTINGS_KEY,settings);
       ARCHIVE.record({kind:'settings_change',at:Date.now(),settings:{...settings}});
       applyAppearance();
@@ -736,6 +838,7 @@
     // Không đóng hộp thoại bằng cách chạm nền: tránh bấm nhầm trên màn hình nhỏ.
     document.addEventListener('keydown',e=>{ if(e.key==='Escape') { modal('settings-modal',false); modal('sync-modal',false); } });
     document.addEventListener('visibilitychange',()=>{
+      if (document.visibilityState !== 'visible') stopBeepSequence();
       if (document.visibilityState === 'visible') {
         if (state.isRecording) wakeUp();
         else if (state.motionReceived && Date.now()-state.sensorAt > 10000) beginAutoCalibration();
@@ -783,6 +886,8 @@
       }
       scheduleRender();
     },15000);
+    // Nhịp kiểm tra 1 giây giữ cảnh báo có thể lặp dù GPS chỉ phát tọa độ vài giây/lần.
+    window.setInterval(maybeBeep,1000);
     if ('serviceWorker' in navigator && window.isSecureContext) {
       window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('Service Worker:',e.message)));
     }

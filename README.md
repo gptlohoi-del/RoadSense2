@@ -1,14 +1,39 @@
-# RoadSense One View v6 — Tuỳ chỉnh giao diện & nghe thử giọng nói (tiếp nối v5)
+# RoadSense One View v7 — Nền phân tích tùy chỉnh & cảnh báo 4 bíp (tiếp nối v6)
 
 **Repository mặc định:** https://github.com/gptlohoi-del/RoadSense2
 
 Đây là bộ mã nguồn PWA độc lập, không cần Tailwind/CDN. Đã loại bỏ Wyn. v5 giữ giao diện One View, chế độ Thoải mái/Cân bằng/Thể thao, tự cân bằng cảm biến, GPS, cảnh báo thử nghiệm, sáng/tối.
 
 
-## Điểm mới v6 (so với v5)
+
+## Điểm mới v7 (so với v6)
+
+1. **Đổi màu nền khung PHÂN TÍCH THỬ NGHIỆM**: mở **CÀI ĐẶT → Giao diện**, nhập mã `#RRGGBB` như `#17365D`, xem màu ô mẫu, nhấn **LƯU**. Không chấp nhận mã sai. Xóa trắng để về màu nền tự đổi theo sáng/tối. Nội dung trong khung tự đổi màu chữ/số nhằm dễ đọc hơn trên nền sáng hoặc tối. Màu đã chọn lưu trong khóa thiết bị `roadsense_settings_v3` cùng các cài đặt khác.
+2. **Đổi cảnh báo bằng giọng đọc dài thành 4 tiếng bíp** bằng Web Audio API. Mỗi lượt gồm 4 âm bíp ngắn (105 ms/âm, khoảng cách 105 ms, tổng khoảng 0,74 giây). Sau lượt bíp, ứng dụng **nghỉ theo số giây nhập trong Cài đặt** (mặc định 12 giây), và lặp lại nếu tốc độ GPS vẫn cao hơn `mức gợi ý + biên độ`.
+3. **Cấu hình cảnh báo**: bật/tắt, khoảng nghỉ 2–90 giây, biên độ vượt 0–30 km/h, cao độ 400–1400 Hz, âm lượng 10–100%. Biên độ mặc định của v7 là **0 km/h**, nghĩa là vượt mức gợi ý thì bíp. Các máy từng dùng bản cũ với biên độ mặc định 10 km/h được chuyển về 0; giá trị tùy chỉnh khác vẫn giữ nguyên.
+4. Nút **🔊 NGHE THỬ 4 BÍP** hoạt động ngay trong Cài đặt và không yêu cầu bạn đã bật cảnh báo. Ứng dụng không dùng `speechSynthesis` cho cảnh báo vượt tốc độ nữa.
+5. **Quy tắc an toàn**: chỉ cảnh báo **khi đang ghi hành trình**, GPS tốt, tọa độ mới trong 10 giây, và tốc độ vượt ngưỡng. Khi tốc độ trở về ngưỡng, GPS mất tín hiệu, tắt cảnh báo hoặc nhấn **DỪNG GHI**, ứng dụng dừng lượt bíp/lặp lại. Vì GPS và tốc độ gợi ý đều có sai số, chỉ coi âm báo là thông tin thử nghiệm, **không phải giới hạn tốc độ hợp pháp**.
+6. Trình duyệt điện thoại thường chặn âm thanh tự phát. Nhấn **NGHE THỬ** hoặc **BẮT ĐẦU GHI** để kích hoạt hệ thống âm thanh. Nếu khóa màn hình/chuyển tab, âm báo có thể bị tạm ngừng; âm lượng thực tế phụ thuộc máy và mức âm lượng của hệ điều hành.
+
+### Tệp sửa trong bản v7
+
+| Tệp | Nội dung |
+|---|---|
+| `index.html` | Thêm ô nhập mã HEX; đổi Cảnh báo giọng nói thành 4 bíp; thêm cao độ, âm lượng và nghe thử. |
+| `style.css` | Ô xem màu và màu chữ/viền tương phản theo nền tùy chỉnh. |
+| `script.js` | Lưu/kiểm tra màu HEX; Web Audio 4 bíp, nghỉ/lặp theo điều kiện, dừng khi mất GPS/hạ tốc/dừng ghi. |
+| `sw.js` | Đổi `CACHE_NAME` thành `roadsense-oneview-v7-customcolor-beeps` để làm mới shell PWA. |
+| `README.md` | Cập nhật hướng dẫn và danh sách tệp sửa. |
+| `archive.js`, `manifest.json`, `icons/*` | **Không thay đổi**. GitHub vẫn là `gptlohoi-del/RoadSense2` và đường dẫn `roadsense-data/v1/`. |
+
+**Cập nhật từ v6:** thay `index.html`, `style.css`, `script.js`, `sw.js` trên GitHub Pages; nếu muốn có hướng dẫn mới thì thêm `README.md`. Không xóa IndexedDB/localStorage; không cần thay `archive.js`. Cảnh báo mới mặc định đang tắt nếu bạn chưa từng bật trước đó, cần bật ở **Cài đặt → Cảnh báo âm thanh** và nhấn **LƯU**.
+
+---
+
+## Tính năng được giữ từ v6 (so với v5)
 
 - **CÀI ĐẶT**: nút **LƯU** nằm trên thanh tiêu đề, ngay cạnh **✕**; nút **Mặc định** vẫn ở cuối hộp thoại. Nút LƯU gửi biểu mẫu bằng thuộc tính `form="settings-form"` nên hoạt động dù ở ngoài form.
-- **Nghe thử cảnh báo**: nút `🔊 NGHE THỬ` ở nhóm Cảnh báo bằng giọng nói. Đọc thử câu cảnh báo theo tốc độ đang nhập, kể cả khi chưa bật cảnh báo; dùng giọng Việt nếu hệ điều hành có. Nếu không phát, kiểm tra âm lượng, quyền phát và giọng tiếng Việt.
+- **Cảnh báo (được thay ở v7)**: tính năng giọng nói v6 đã được thay bằng 4 tiếng bíp nhanh như mô tả phía trên.
 - **Thu phóng nội dung 60–200%**: thay đổi kích thước nội dung dashboard. Mức 100% ưu tiên One View; mức cao có thể **cuộn dashboard** thay vì bị cắt mất nội dung trên màn hình nhỏ. Cửa sổ Cài đặt luôn có thể cuộn độc lập.
 - **Hai cỡ số độc lập**: Cỡ số MỨC GỢI Ý và TỐC ĐỘ GPS điều chỉnh qua thanh trượt 34–110 px; giá trị lưu riêng. CSS giới hạn cỡ chữ khi cần để tránh tràn màn hình quá hẹp.
 - **Giữ tương thích**: vẫn dùng `roadsense_settings_v3`, tự chuyển giá trị cỡ chữ kiểu cũ sang cỡ số mới. Không thay đổi dữ liệu hành trình hay bộ đồng bộ GitHub của v5.

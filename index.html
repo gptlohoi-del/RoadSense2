@@ -31,7 +31,7 @@
     </header>
 
     <main id="dashboard" class="dashboard" aria-label="Bảng điều khiển RoadSense">
-      <section class="hero card" aria-label="Tốc độ">
+      <section id="analysis-panel" class="hero card" aria-label="Tốc độ">
         <div class="hero-heading">
           <span class="eyebrow">PHÂN TÍCH THỬ NGHIỆM</span>
           <div class="mode-options" role="group" aria-label="Chọn chế độ phân tích">
@@ -109,6 +109,11 @@
           <p class="helper">Các giá trị là tham số thử nghiệm, không phải giới hạn tốc độ pháp lý. Thay đổi được lưu trên thiết bị này.</p>
           <fieldset><legend>Giao diện</legend>
             <label class="field"><span>Giao diện màu</span><select id="setting-theme"><option value="auto">Theo hệ thống</option><option value="dark">Tối</option><option value="light">Sáng</option></select></label>
+            <label class="field" for="setting-hero-color"><span>Màu nền khung PHÂN TÍCH THỬ NGHIỆM (mã HEX)</span>
+              <span class="color-input-row"><input id="setting-hero-color" type="text" inputmode="text" maxlength="7" placeholder="#112233" autocomplete="off" spellcheck="false" aria-describedby="hero-color-help hero-color-error"><span id="hero-color-swatch" class="color-swatch" aria-hidden="true"></span></span>
+              <small id="hero-color-help" class="helper inline-help">Nhập #RRGGBB (ví dụ #17365D). Để trống để nền tự đổi theo theme sáng/tối.</small>
+              <small id="hero-color-error" class="input-error" role="alert" hidden>Mã màu không hợp lệ. Dùng #RRGGBB, ví dụ #17365D.</small>
+            </label>
             <label class="field"><span>Cỡ số MỨC GỢI Ý (34–110 px)</span><input id="setting-rec-speed-size" type="range" min="34" max="110" step="2"><output id="setting-rec-speed-size-val" for="setting-rec-speed-size">68 px</output></label>
             <label class="field"><span>Cỡ số TỐC ĐỘ GPS (34–110 px)</span><input id="setting-gps-speed-size" type="range" min="34" max="110" step="2"><output id="setting-gps-speed-size-val" for="setting-gps-speed-size">64 px</output></label>
             <label class="field"><span>Thu phóng nội dung (60–200%)</span><input id="setting-ui-scale" type="range" min="60" max="200" step="5"><output id="setting-ui-scale-val" for="setting-ui-scale">100%</output></label>
@@ -137,14 +142,16 @@
             <p id="gps-diagnostics" class="diagnostics">GPS: chưa kiểm tra.</p>
             <button id="btn-request-motion" class="secondary-btn" type="button">Cấp quyền / Cân bằng lại cảm biến</button>
           </fieldset>
-          <fieldset><legend>Cảnh báo bằng giọng nói</legend>
-            <label class="check-row"><input id="setting-voice-enabled" type="checkbox"> <span>Bật nhắc bằng giọng nói khi phát hiện rủi ro</span></label>
-            <label class="field"><span>Khoảng nghỉ giữa 2 cảnh báo (giây)</span><input id="setting-voice-interval" type="number" min="5" max="90" step="1"></label>
-            <label class="field"><span>Tốc độ đọc (0.7–1.5)</span><input id="setting-voice-rate" type="number" min="0.7" max="1.5" step="0.1"></label>
-            <label class="field"><span>Biên độ vượt mức gợi ý (km/h)</span><input id="setting-voice-margin" type="number" min="0" max="30" step="1"></label>
+          <fieldset><legend>Cảnh báo âm thanh – 4 tiếng bíp</legend>
+            <label class="check-row"><input id="setting-voice-enabled" type="checkbox"> <span>Bật cảnh báo khi đang ghi và tốc độ GPS vượt mức gợi ý</span></label>
+            <label class="field"><span>Khoảng nghỉ sau mỗi lượt 4 bíp (giây)</span><input id="setting-voice-interval" type="number" min="2" max="90" step="1"></label>
+            <label class="field"><span>Chỉ cảnh báo khi vượt thêm (km/h, 0 = vượt là bíp)</span><input id="setting-voice-margin" type="number" min="0" max="30" step="1"></label>
+            <label class="field"><span>Độ cao tiếng bíp (Hz)</span><input id="setting-beep-pitch" type="number" min="400" max="1400" step="50"></label>
+            <label class="field"><span>Âm lượng bíp (10–100%)</span><input id="setting-beep-volume" type="range" min="10" max="100" step="5"><output id="setting-beep-volume-val" for="setting-beep-volume">55%</output></label>
+            <p class="helper">Mỗi lượt: 4 tiếng bíp ngắn trong khoảng 0,7 giây. Hết thời gian nghỉ sẽ chỉ bíp tiếp nếu GPS còn cập nhật và tốc độ vẫn vượt mức gợi ý. Âm thanh cần được trình duyệt cho phép sau thao tác chạm.</p>
             <div class="voice-preview-row">
-              <button id="btn-voice-preview" class="secondary-btn" type="button">🔊 NGHE THỬ</button>
-              <span id="voice-preview-status" class="preview-hint" role="status" aria-live="polite">Nghe thử với tốc độ đọc đang chọn, không cần bật cảnh báo.</span>
+              <button id="btn-voice-preview" class="secondary-btn" type="button">🔊 NGHE THỬ 4 BÍP</button>
+              <span id="voice-preview-status" class="preview-hint" role="status" aria-live="polite">Nghe thử ngay với âm lượng và cao độ đang chọn.</span>
             </div>
           </fieldset>
         </div>
