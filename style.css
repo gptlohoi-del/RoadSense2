@@ -43,11 +43,14 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .brand-mark { color: var(--accent); font-size: 23px; line-height:1; }
 .brand-name { font-size: 17px; font-weight: 850; letter-spacing:-.04em; }
 .top-actions { display:flex; align-items:center; gap:6px; }
-.icon-btn, .gps-chip, .mode-badge { border:1px solid var(--line); background:var(--panel-2); color:var(--text); border-radius:10px; }
+.icon-btn, .gps-chip, .mode-option { border:1px solid var(--line); background:var(--panel-2); color:var(--text); border-radius:10px; }
 .icon-btn { display:grid; place-items:center; width:36px; height:36px; font-size:19px; flex:0 0 auto; }
 .icon-btn:active, .gps-chip:active, .action-btn:active { transform:scale(.97); }
-.gps-chip { padding:0 10px; height:35px; max-width:125px; display:flex; gap:6px; align-items:center; font-size:11px; white-space:nowrap; }
-.gps-chip span:last-child { overflow:hidden; text-overflow:ellipsis; }
+.gps-chip { padding:2px 8px; height:37px; width:117px; flex:0 0 117px; display:flex; gap:6px; align-items:center; justify-content:center; text-align:left; font-size:11px; white-space:nowrap; }
+.gps-lines { display:flex; flex-direction:column; justify-content:center; align-items:flex-start; min-width:0; overflow:hidden; line-height:1.1; }
+.gps-lines > span, .gps-lines > small { max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gps-lines > span { font-size:11px; font-weight:800; }
+.gps-lines > small { font-size:9px; color:var(--muted); font-weight:550; margin-top:2px; font-variant-numeric:tabular-nums; }
 .status-dot { width:8px; height:8px; border-radius:50%; flex:0 0 auto; background:var(--warn); }
 .status-dot.ok { background:var(--accent); }
 .status-dot.bad { background:var(--error); }
@@ -57,7 +60,10 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .hero { display:flex; flex-direction:column; padding:clamp(9px,1.8vh,17px); }
 .hero-heading { display:flex; align-items:center; justify-content:space-between; gap:6px; }
 .eyebrow { color:var(--muted); font-size:clamp(9px,1.4vh,11px); letter-spacing:.08em; font-weight:750; }
-.mode-badge { padding:5px 9px; font-size:clamp(10px,1.6vh,12px); font-weight:750; }
+.mode-options { display:flex; gap:3px; align-items:center; min-width:0; flex:0 1 auto; }
+.mode-option { padding:5px 6px; border-radius:7px; font-size:clamp(9px,1.35vh,10px); font-weight:650; white-space:nowrap; line-height:1.1; }
+.mode-option[aria-pressed="true"] { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800; }
+.mode-option:active { transform:scale(.98); }
 .speed-grid { flex:1; display:grid; grid-template-columns:1.12fr .88fr; min-height:0; margin-top:5px; }
 .speed-block { display:flex; flex-direction:column; justify-content:center; min-width:0; }
 .actual-speed { border-left:1px solid var(--line); padding-left:clamp(10px,3vw,27px); }
@@ -87,11 +93,18 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .action-btn small { font-size:clamp(9px,1.4vh,11px); margin-top:2px; font-weight:450; }
 .record-btn { background:var(--accent); color:var(--accent-text); }
 .record-btn.active { background:#c34856; color:#fff; }
-.calibrate-btn { background:var(--panel-2); color:var(--text); border-color:var(--line); }
+.calibration-state { min-width:0; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:6px; border-radius:13px; background:var(--panel-2); color:var(--text); border:1px solid var(--line); }
+.calibration-heading { font-size:clamp(10px,1.7vh,13px); font-weight:800; white-space:nowrap; }
+.calibration-state small { max-width:100%; font-size:clamp(9px,1.4vh,11px); line-height:1.2; margin-top:4px; font-weight:500; color:var(--muted); overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.calibration-state.ready { border-color:var(--accent); }
+.calibration-state.ready .calibration-heading { color:var(--accent); }
+.calibration-state.unavailable { border-color:var(--warn); }
 .safety-note { margin:0; text-align:center; color:var(--muted); font-size:clamp(9px,1.35vh,11px); line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* Dialogs can scroll; dashboard never needs scrolling. */
-.overlay { position:fixed; inset:0; z-index:100; display:grid; place-items:center; padding: max(12px,env(safe-area-inset-top,0px)) max(10px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px)); background:rgba(0,0,0,.76); backdrop-filter:blur(4px); }
+/* Không dùng backdrop-filter:blur vì có thể gây nhấp nháy GPU trên WebKit/Android. */
+.overlay { position:fixed; inset:0; z-index:100; display:grid; place-items:center; padding: max(12px,env(safe-area-inset-top,0px)) max(10px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px)); background:rgba(1,7,17,.94); overscroll-behavior:contain; }
+body.dialog-open .dashboard, body.dialog-open .topbar { visibility:hidden; }
 .modal { width:min(100%,510px); max-height:min(94dvh,850px); background:var(--panel); border:1px solid var(--line); border-radius:17px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 30px 90px rgba(0,0,0,.35); }
 .modal.narrow { max-width:470px; }
 .modal-header { flex:0 0 auto; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid var(--line); }
@@ -151,7 +164,9 @@ legend { color:var(--accent); font-weight:800; font-size:13px; padding:0 7px; }
   .topbar { padding-left:8px; padding-right:8px; }
   .top-actions { gap:4px; }
   .icon-btn { width:32px; height:34px; }
-  .gps-chip { max-width:100px; padding:0 6px; }
+  .gps-chip { width:104px; flex-basis:104px; padding:2px 5px; gap:4px; }
+  .mode-option { padding:5px 4px; font-size:9px; }
+  .eyebrow { font-size:9px; letter-spacing:0; }
   .speed-number strong { font-size:calc(clamp(35px,10vw,46px) * var(--ui-scale)); }
   .actual-speed .speed-number strong { font-size:calc(clamp(30px,8vw,39px) * var(--ui-scale)); }
 }
@@ -169,4 +184,19 @@ legend { color:var(--accent); font-weight:800; font-size:13px; padding:0 7px; }
 @media (max-height:440px) and (orientation:portrait) {
   .safety-note { display:none; }
   .dashboard { grid-template-rows:minmax(0,1.2fr) minmax(0,1fr) auto auto; }
+}
+
+/* Thiết bị rất hẹp: giữ ba lựa chọn và GPS 2 dòng trong cùng một hàng. */
+@media (max-width:350px) {
+  .brand { gap:2px; }
+  .brand-name { font-size:12px; }
+  .brand-mark { font-size:17px; }
+  .topbar { gap:4px; padding-left:6px; padding-right:6px; }
+  .top-actions { gap:3px; }
+  .icon-btn { width:29px; height:33px; font-size:17px; }
+  .gps-chip { flex-basis:99px; width:99px; }
+  .hero-heading { gap:3px; }
+  .eyebrow { font-size:8px; }
+  .mode-options { gap:2px; }
+  .mode-option { font-size:8.5px; padding:5px 3px; }
 }

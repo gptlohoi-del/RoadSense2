@@ -13,7 +13,7 @@
     vibrationThreshold: 0.35, vibrationPenalty: 15, warningRadius: 150,
     rememberBumps: true, highAccuracy: true, gpsTimeout: 15,
     gpsMaxAge: 2, gpsMaxAccuracy: 70, speedSmoothing: 0.45,
-    vibrationSmoothing: 0.3, calibDelay: 0.7, voiceEnabled: false,
+    vibrationSmoothing: 0.3, calibDelay: 1.5, voiceEnabled: false,
     voiceInterval: 12, voiceRate: 1.0, voiceMargin: 10
   });
   const FIELDS = {
@@ -60,7 +60,7 @@
       lateralAccel:[0.6,3.5], vibrationThreshold:[0.1,2], vibrationPenalty:[0,40],
       warningRadius:[30,1000], gpsTimeout:[5,60], gpsMaxAge:[0,30],
       gpsMaxAccuracy:[10,300], speedSmoothing:[0.1,1], vibrationSmoothing:[0.05,1],
-      calibDelay:[0.3,5], voiceInterval:[5,90], voiceRate:[0.7,1.5], voiceMargin:[0,30]
+      calibDelay:[1.2,5], voiceInterval:[5,90], voiceRate:[0.7,1.5], voiceMargin:[0,30]
     };
     for (const [key, [min,max]] of Object.entries(constraints)) safe[key] = clamp(safe[key], min, max);
     if (safe.minSpeed > safe.maxSpeed) safe.minSpeed = safe.maxSpeed;
@@ -76,7 +76,9 @@
     gpsAccuracy: null, lastFix: null, lastGoodAt: 0, speed: null, heading: null,
     previousHeading: null, curveRadius: null, curveAt: 0, vibration: null,
     gravityBase: null, sensorAt: 0, motionReceived: false, calibrating: false,
-    calibrationSamples: [], isRecording: false, activeTrip: null, db: null,
+    calibrationSamples: [], calibrationStartedAt: 0, calibrationStatus: 'waiting',
+    calibrationText: '', lastCalibrationAt: 0, gpsIntervals: [], lastGpsTimestamp: null,
+    lastDashboardRenderAt: 0, isRecording: false, activeTrip: null, db: null,
     wakeLock: null, nearestEvent: null, recommended: settings.baseSpeed,
     recReason: 'Theo mức cấu hình', lastVoiceAt: 0, lastBumpAt: 0,
     uploadBusy: false, lastNotice: '', renderPending: false
@@ -116,8 +118,26 @@
 
   function modal(id, show) {
     const el = $(id);
+    if (show) document.querySelectorAll('.overlay').forEach(other => { if (other !== el) other.hidden = true; });
     el.hidden = !show;
-    if (show) (el.querySelector('input:not([type="hidden"]),button') || el).focus();
+    document.body.classList.toggle('dialog-open', !!document.querySelector('.overlay:not([hidden])'));
+    // Không focus ô nhập liệu khi mở modal: trên điện thoại bàn phím bật lên
+    // sẽ co giãn viewport liên tục, tạo cảm giác cửa sổ bị chớp.
+    if (show) requestAnimationFrame(() => el.querySelector('.close-btn')?.focus({preventScroll:true}));
+    else scheduleRender();
+  }
+  function updateGpsInfo() {
+    const status = state.gpsState;
+    const hz = state.gpsIntervals.length ?
+      (1000 / (state.gpsIntervals.reduce((a,b)=>a+b,0)/state.gpsIntervals.length)).toFixed(1) : '--';
+    $('gps-meta').textContent = status === 'ok' ? `${hz} Hz · ±${Math.round(state.gpsAccuracy)} m` :
+      status === 'weak' && finite(state.gpsAccuracy) ? `±${Math.round(state.gpsAccuracy)} m` :
+      status === 'waiting' ? 'Đang định vị' : 'Chạm thử lại';
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    const downlink = finite(connection?.downlink) ? `\nInternet ước tính: ~${connection.downlink} Mbps (khác GPS)` : '';
+    $('gps-diagnostics').textContent = `Trạng thái: ${state.gpsMessage}${finite(state.gpsAccuracy) ? `\nSai số ước tính: ±${Math.round(state.gpsAccuracy)} m` : ''}` +
+      `\nNhịp cập nhật vị trí: ${hz} Hz (lần/giây; không phải Mbps)${downlink}` +
+      `\nTrang bảo mật: ${window.isSecureContext ? 'Có (HTTPS/localhost)' : 'Không — GPS thường bị trình duyệt khóa'}`;
   }
   function setGps(status, msg, accuracy = null) {
     state.gpsState = status;
@@ -126,7 +146,7 @@
     const dot = $('gps-dot');
     dot.className = 'status-dot ' + (status === 'ok' ? 'ok' : status === 'waiting' ? 'waiting' : 'bad');
     $('gps-status').textContent = ({ok:'GPS tốt',weak:'GPS yếu',waiting:'Chờ GPS',error:'GPS lỗi',blocked:'GPS bị chặn'})[status] || 'GPS';
-    $('gps-diagnostics').textContent = `Trạng thái: ${msg}${finite(accuracy) ? `\nSai số ước tính: ±${Math.round(accuracy)} m` : ''}\nTrang bảo mật: ${window.isSecureContext ? 'Có (HTTPS/localhost)' : 'Không — GPS thường bị trình duyệt khóa'}`;
+    updateGpsInfo();
     scheduleRender();
   }
   const rad = a => a * Math.PI / 180;
@@ -149,6 +169,9 @@
     }
     if (!navigator.geolocation) { setGps('blocked','Trình duyệt không hỗ trợ Geolocation.'); return; }
     if (!window.isSecureContext) { setGps('blocked','Hãy truy cập bằng HTTPS hoặc localhost.'); return; }
+    state.gpsIntervals = [];
+    state.lastGpsTimestamp = null;
+    state.lastFix = null; // Không nối hai hành trình bằng tọa độ cũ sau khi tái kết nối.
     setGps('waiting','Đang yêu cầu vị trí. Hãy cho phép truy cập vị trí và bật định vị trên điện thoại.');
     try {
       state.gpsWatch = navigator.geolocation.watchPosition(onPosition, onGpsError, {
@@ -176,6 +199,16 @@
       return;
     }
     const fix = { lat:c.latitude, lng:c.longitude, accuracy:c.accuracy, at:pos.timestamp || Date.now() };
+    // Geolocation chỉ đưa ra từng bản cập nhật tọa độ, không có băng thông dữ liệu GPS.
+    // Chỉ tính tần suất (Hz) từ các mốc thời gian mới; bỏ mẫu cache/trùng thời gian.
+    if (state.lastGpsTimestamp !== null) {
+      const interval = fix.at - state.lastGpsTimestamp;
+      if (interval >= 200 && interval <= 30000) {
+        state.gpsIntervals.push(interval);
+        if (state.gpsIntervals.length > 6) state.gpsIntervals.shift();
+      }
+    }
+    if (state.lastGpsTimestamp === null || fix.at > state.lastGpsTimestamp) state.lastGpsTimestamp = fix.at;
     const prev = state.lastFix;
     let dt = null, moved = null, derivedHeading = null;
     if (prev) {
@@ -239,57 +272,88 @@
     return nearest;
   }
 
+  function setCalibrationStatus(kind, label) {
+    if (state.calibrationStatus === kind && state.calibrationText === label) return;
+    state.calibrationStatus = kind;
+    state.calibrationText = label;
+    $('calibrate-subtext').textContent = label;
+    const el = $('auto-calibration-status');
+    el.classList.toggle('ready',kind === 'ready');
+    el.classList.toggle('unavailable',kind === 'unavailable');
+    scheduleRender();
+  }
+  function beginAutoCalibration() {
+    state.calibrating = true;
+    state.calibrationSamples = [];
+    state.calibrationStartedAt = 0;
+    state.vibration = null;
+    setCalibrationStatus('measuring','Đang tự cân bằng…');
+  }
   function onMotion(e) {
-    const v = e.accelerationIncludingGravity || e.acceleration;
+    const gravity = e.accelerationIncludingGravity;
+    const hasGravity = !!gravity && finite(gravity.x) && finite(gravity.y) && finite(gravity.z);
+    const a = e.acceleration;
+    const v = hasGravity ? gravity : a;
     if (!v || !finite(v.x) || !finite(v.y) || !finite(v.z)) return;
     const magnitude = Math.hypot(v.x,v.y,v.z);
+    const now = Date.now();
     state.motionReceived = true;
-    state.sensorAt = Date.now();
-    if (state.calibrating) { state.calibrationSamples.push(magnitude); return; }
-    if (state.gravityBase === null) state.gravityBase = e.accelerationIncludingGravity ? magnitude : 0;
-    // Điện thoại có thể trả về acceleration (đã bỏ trọng lực) hoặc accelerationIncludingGravity.
-    const raw = e.accelerationIncludingGravity ? Math.abs(magnitude - state.gravityBase)/G : magnitude/G;
-    if (e.accelerationIncludingGravity) state.gravityBase = .995*state.gravityBase+.005*magnitude;
+    state.sensorAt = now;
+
+    if (state.calibrating) {
+      if (!state.calibrationStartedAt) state.calibrationStartedAt = now;
+      state.calibrationSamples.push({at:now, value:magnitude, hasGravity});
+      const duration = Math.max(1200,settings.calibDelay*1000);
+      state.calibrationSamples = state.calibrationSamples.filter(s => s.at >= now-duration && s.hasGravity === hasGravity).slice(-250);
+      const samples = state.calibrationSamples;
+      if (samples.length >= 8 && samples.at(-1).at - samples[0].at >= duration*.9) {
+        const values=samples.map(s=>s.value);
+        const mean=values.reduce((a,b)=>a+b,0)/values.length;
+        const variance=values.reduce((a,b)=>a+(b-mean)**2,0)/values.length;
+        const stable=Math.sqrt(variance) < G*.08 && Math.max(...values)-Math.min(...values) < G*.27;
+        if (stable) {
+          state.gravityBase = hasGravity ? mean : 0;
+          state.vibration = 0;
+          state.calibrating = false;
+          state.lastCalibrationAt = now;
+          state.calibrationSamples=[];
+          setCalibrationStatus('ready','Đã cân bằng tự động');
+        }
+      }
+      if (state.calibrating && now-state.calibrationStartedAt >= Math.max(4500,duration*2)) {
+        setCalibrationStatus('measuring','Đặt máy đứng yên để cân bằng');
+      }
+      return;
+    }
+
+    if (state.gravityBase === null) state.gravityBase = hasGravity ? magnitude : 0;
+    const raw = hasGravity ? Math.abs(magnitude - state.gravityBase)/G : magnitude/G;
+    if (hasGravity) state.gravityBase = .995*state.gravityBase+.005*magnitude;
     state.vibration = state.vibration === null ? raw :
       state.vibration*(1-settings.vibrationSmoothing)+raw*settings.vibrationSmoothing;
     if (raw >= settings.vibrationThreshold && state.isRecording && settings.rememberBumps &&
-        state.gpsState === 'ok' && state.lastFix && Date.now()-state.lastBumpAt > 15000 &&
+        state.gpsState === 'ok' && state.lastFix && now-state.lastBumpAt > 15000 &&
         state.speed !== null && state.speed >= 8) {
-      state.lastBumpAt = Date.now();
-      const event = { lat:state.lastFix.lat, lng:state.lastFix.lng, at:Date.now(), shockG:Math.round(raw*100)/100 };
-      events.push(event);
-      events = events.slice(-300);
+      state.lastBumpAt = now;
+      events.push({ lat:state.lastFix.lat, lng:state.lastFix.lng, at:now, shockG:Math.round(raw*100)/100 });
+      events=events.slice(-300);
       writeJSON(EVENTS_KEY,events);
     }
-    // Giới hạn số lần cập nhật giao diện khi cảm biến gửi >60 sự kiện/giây.
-    if (Date.now()%4 === 0) scheduleRender();
+    // Giới hạn cập nhật DOM ở ~4 lần/giây để không làm nháy popup trên máy yếu.
+    if (now-state.lastDashboardRenderAt >= 250) scheduleRender();
   }
   async function requestMotionAccess() {
+    if (!window.isSecureContext) return 'Cảm biến cần HTTPS hoặc localhost.';
     if (!('DeviceMotionEvent' in window)) return 'Thiết bị/trình duyệt không hỗ trợ cảm biến chuyển động.';
     if (typeof DeviceMotionEvent.requestPermission === 'function') {
       try {
+        // iOS bắt buộc hỏi quyền từ cú chạm của người dùng; không thể bỏ qua.
         const result = await DeviceMotionEvent.requestPermission();
         if (result !== 'granted') return 'Bạn chưa cấp quyền cảm biến chuyển động.';
-      } catch (e) { return `Lỗi cấp quyền cảm biến: ${e.message}`; }
+      } catch(e) { return `Lỗi cấp quyền cảm biến: ${e.message}`; }
     }
-    return 'Đã yêu cầu cảm biến; vui lòng giữ điện thoại ổn định để kiểm tra tín hiệu.';
-  }
-  async function calibrate() {
-    const msg = await requestMotionAccess();
-    $('calibrate-subtext').textContent = msg.includes('chưa') || msg.includes('không') ? 'Kiểm tra quyền cảm biến' : 'Đang đo mẫu…';
-    state.calibrating = true;
-    state.calibrationSamples = [];
-    $('btn-calibrate').disabled = true;
-    window.setTimeout(() => {
-      state.calibrating = false;
-      if (state.calibrationSamples.length > 2) {
-        state.gravityBase = state.calibrationSamples.reduce((a,b)=>a+b,0)/state.calibrationSamples.length;
-        state.vibration = 0;
-        $('calibrate-subtext').textContent = 'Đã cân bằng';
-      } else $('calibrate-subtext').textContent = 'Không có dữ liệu cảm biến';
-      $('btn-calibrate').disabled = false;
-      scheduleRender();
-    },settings.calibDelay*1000);
+    if (state.calibrationStatus !== 'ready') beginAutoCalibration();
+    return 'Đã yêu cầu cảm biến; hãy giữ điện thoại đứng yên để tự cân bằng.';
   }
 
   function calculateRecommendation() {
@@ -330,13 +394,18 @@
     if (state.curveRadius !== null && Date.now()-state.curveAt >= 7500) state.curveRadius=null;
     if (state.sensorAt && Date.now()-state.sensorAt > 10000) state.vibration = null;
     calculateRecommendation();
-    $('mode-badge').textContent = `${MODES[settings.mode]} ▾`;
+    state.lastDashboardRenderAt = Date.now();
+    document.querySelectorAll('.mode-option').forEach(btn => {
+      const selected = btn.dataset.mode === settings.mode;
+      if (btn.getAttribute('aria-pressed') !== String(selected)) btn.setAttribute('aria-pressed',String(selected));
+    });
     $('rec-speed').textContent = state.recommended;
     $('rec-reason').textContent = state.recReason;
     $('curr-speed').textContent = state.gpsState === 'ok' && state.speed !== null ? Math.round(state.speed) : '--';
     $('gps-accuracy-hint').textContent = state.gpsState === 'ok' ? `Sai số ±${Math.round(state.gpsAccuracy)} m` : 'Đợi dữ liệu vị trí';
     $('vibration-score').textContent = state.vibration === null ? '--' : state.vibration.toFixed(2);
-    $('sensor-state').textContent = state.motionReceived && state.vibration !== null ? 'Cảm biến đang hoạt động' : 'Chưa có dữ liệu cảm biến';
+    $('sensor-state').textContent = state.calibrationStatus === 'ready' && state.vibration !== null ?
+      'Đã tự cân bằng' : state.calibrationStatus === 'measuring' ? 'Đang tự cân bằng' : 'Chưa có dữ liệu cảm biến';
     $('curve-radius').textContent = state.curveRadius === null ? '--' : Math.round(state.curveRadius);
     $('countdown-value').textContent = state.nearestEvent ? Math.round(state.nearestEvent.distance) : '--';
     $('trip-distance').textContent = (state.activeTrip?.distanceKm || 0).toFixed(2);
@@ -367,7 +436,8 @@
     $('alert-detail').textContent = detail;
   }
   function scheduleRender() {
-    if (state.renderPending) return;
+    // Khi modal đang mở, không vẽ lại bảng điều khiển ở phía sau.
+    if (document.body.classList.contains('dialog-open') || state.renderPending) return;
     state.renderPending = true;
     requestAnimationFrame(render);
   }
@@ -420,8 +490,14 @@
       $('record-label').textContent = '■ DỪNG GHI';
       $('record-subtext').textContent = 'Đang lưu dữ liệu trên máy';
       $('btn-record').classList.add('active');
-      // Cần gọi xin quyền cảm biến từ thao tác người dùng (iOS).
-      requestMotionAccess().catch(()=>{});
+      // Với iPhone, quyền cảm biến chỉ có thể xin từ lần nhấn BẮT ĐẦU.
+      // Để máy đứng yên đến khi tự cân bằng xong, rồi mới di chuyển.
+      if (state.calibrationStatus !== 'ready') {
+        requestMotionAccess().then(msg => {
+          if (msg.includes('chưa') || msg.includes('không') || msg.includes('Lỗi'))
+            setCalibrationStatus('unavailable','Cần cấp quyền cảm biến');
+        }).catch(()=>setCalibrationStatus('unavailable','Không truy cập được cảm biến'));
+      }
       if (state.gpsState !== 'ok') startGPS();
       await wakeUp();
     } else {
@@ -494,9 +570,19 @@
     $('btn-theme').addEventListener('click',()=>{ settings.theme=resolvedTheme()==='dark'?'light':'dark'; writeJSON(SETTINGS_KEY,settings); applyAppearance(); });
     $('btn-gps').addEventListener('click',startGPS);
     $('btn-record').addEventListener('click',toggleRecording);
-    $('btn-calibrate').addEventListener('click',calibrate);
-    $('btn-request-motion').addEventListener('click',async()=>{ $('gps-diagnostics').textContent=await requestMotionAccess(); });
-    $('mode-badge').addEventListener('click',()=>{ const list=['comfort','balanced','sport']; settings.mode=list[(list.indexOf(settings.mode)+1)%list.length]; writeJSON(SETTINGS_KEY,settings); scheduleRender(); });
+    // Nút CÂN BẰNG đã được thay bằng trạng thái tự cân bằng, không cần bấm.
+    $('btn-request-motion').addEventListener('click',async()=>{
+      beginAutoCalibration();
+      const msg=await requestMotionAccess();
+      if (msg.includes('chưa') || msg.includes('không') || msg.includes('Lỗi')) setCalibrationStatus('unavailable','Cần cấp quyền cảm biến');
+      $('gps-diagnostics').textContent += `\nCảm biến: ${msg}`;
+    });
+    document.querySelectorAll('.mode-option').forEach(btn=>btn.addEventListener('click',()=>{
+      if (!Object.hasOwn(MODES,btn.dataset.mode)) return;
+      settings.mode=btn.dataset.mode;
+      writeJSON(SETTINGS_KEY,settings);
+      scheduleRender();
+    }));
     $('setting-ui-scale').addEventListener('input',e=>{ $('setting-ui-scale-val').textContent=`${e.target.value}%`; });
     $('btn-reset-settings').addEventListener('click',()=>fillForm(DEFAULTS));
     $('settings-form').addEventListener('submit',e=>{
@@ -511,9 +597,15 @@
     });
     $('btn-export').addEventListener('click',()=>exportJSON().catch(e=>$('sync-status-box').textContent=e.message));
     $('btn-start-upload').addEventListener('click',uploadGitHub);
-    document.querySelectorAll('.overlay').forEach(overlay=>overlay.addEventListener('click',e=>{ if(e.target===overlay) modal(overlay.id,false); }));
+    // Không đóng hộp thoại bằng cách chạm nền: tránh bấm nhầm trên màn hình nhỏ.
     document.addEventListener('keydown',e=>{ if(e.key==='Escape') { modal('settings-modal',false); modal('sync-modal',false); } });
-    document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && state.isRecording) wakeUp(); });
+    document.addEventListener('visibilitychange',()=>{
+      if (document.visibilityState === 'visible') {
+        if (state.isRecording) wakeUp();
+        else if (state.motionReceived && Date.now()-state.sensorAt > 10000) beginAutoCalibration();
+      }
+    });
+    window.addEventListener('orientationchange',()=>{ if (!state.isRecording) beginAutoCalibration(); });
     const mq=window.matchMedia?.('(prefers-color-scheme: light)');
     mq?.addEventListener?.('change',()=>{ if(settings.theme==='auto') applyAppearance(); });
   }
@@ -524,6 +616,12 @@
     render();
     initDB().catch(()=>{});
     window.addEventListener('devicemotion',onMotion,{passive:true});
+    beginAutoCalibration(); // Tự lấy mẫu ngay khi mở web, nếu cảm biến đã được cho phép.
+    window.setTimeout(()=>{
+      if (!state.motionReceived && state.calibrating) setCalibrationStatus('unavailable',
+        typeof window.DeviceMotionEvent?.requestPermission === 'function' ?
+        'iPhone: cấp quyền khi BẮT ĐẦU' : 'Chưa nhận tín hiệu cảm biến');
+    },4000);
     startGPS();
     window.setInterval(()=>{
       if (state.gpsState==='ok' && Date.now()-state.lastGoodAt > Math.max(15000,settings.gpsTimeout*2000)) {

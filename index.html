@@ -21,7 +21,7 @@
       <div class="top-actions">
         <button id="btn-gps" class="gps-chip" type="button" title="Chạm để yêu cầu GPS" aria-label="Kết nối GPS">
           <span id="gps-dot" class="status-dot waiting" aria-hidden="true"></span>
-          <span id="gps-status">Chờ GPS</span>
+          <span class="gps-lines"><span id="gps-status">Chờ GPS</span><small id="gps-meta">Đang kết nối</small></span>
         </button>
         <button id="btn-theme" class="icon-btn" type="button" title="Đổi giao diện sáng hoặc tối" aria-label="Đổi giao diện sáng tối">☾</button>
         <button id="btn-sync" class="icon-btn" type="button" title="Xuất dữ liệu hoặc tải lên GitHub" aria-label="Dữ liệu và GitHub">⇪</button>
@@ -33,7 +33,11 @@
       <section class="hero card" aria-label="Tốc độ">
         <div class="hero-heading">
           <span class="eyebrow">PHÂN TÍCH THỬ NGHIỆM</span>
-          <button id="mode-badge" class="mode-badge" type="button" title="Đổi chế độ thận trọng">Cân bằng ▾</button>
+          <div class="mode-options" role="group" aria-label="Chọn chế độ phân tích">
+            <button class="mode-option" type="button" data-mode="comfort" aria-pressed="false">Thoải mái</button>
+            <button class="mode-option" type="button" data-mode="balanced" aria-pressed="true">Cân bằng</button>
+            <button class="mode-option" type="button" data-mode="sport" aria-pressed="false">Thể thao</button>
+          </div>
         </div>
         <div class="speed-grid">
           <div class="speed-block primary-speed">
@@ -82,7 +86,9 @@
 
       <div class="buttons-row">
         <button id="btn-record" class="action-btn record-btn" type="button"><span id="record-label">● BẮT ĐẦU GHI</span><small id="record-subtext">Lưu hành trình trên máy</small></button>
-        <button id="btn-calibrate" class="action-btn calibrate-btn" type="button"><span>⊕ CÂN BẰNG</span><small id="calibrate-subtext">Hiệu chỉnh cảm biến</small></button>
+        <div id="auto-calibration-status" class="calibration-state" role="status" aria-live="polite" aria-label="Trạng thái tự cân bằng">
+          <span class="calibration-heading">◎ TỰ CÂN BẰNG</span><small id="calibrate-subtext">Đang chờ cảm biến…</small>
+        </div>
       </div>
       <p class="safety-note">⚠ Không thay thế biển báo, giới hạn tốc độ hoặc phán đoán của người lái.</p>
     </main>
@@ -117,9 +123,10 @@
             <label class="field"><span>Sai số GPS tối đa (m)</span><input id="setting-gps-max-accuracy" type="number" min="10" max="300" step="5"></label>
             <label class="field"><span>Độ nhạy làm mượt vận tốc (0.1–1)</span><input id="setting-speed-smoothing" type="number" min="0.1" max="1" step="0.05"></label>
             <label class="field"><span>Độ nhạy làm mượt dao động (0.05–1)</span><input id="setting-vibration-smoothing" type="number" min="0.05" max="1" step="0.05"></label>
-            <label class="field"><span>Thời gian lấy mẫu cân bằng (giây)</span><input id="setting-calib-delay" type="number" min="0.3" max="5" step="0.1"></label>
+            <p class="helper">Cảm biến tự cân bằng khi mở web và điện thoại đứng yên. Trên iPhone, trình duyệt có thể yêu cầu cấp quyền một lần bằng thao tác chạm.</p>
+            <label class="field"><span>Thời gian tự cân bằng (1,2–5 giây)</span><input id="setting-calib-delay" type="number" min="1.2" max="5" step="0.1"></label>
             <p id="gps-diagnostics" class="diagnostics">GPS: chưa kiểm tra.</p>
-            <button id="btn-request-motion" class="secondary-btn" type="button">Yêu cầu quyền cảm biến (iPhone)</button>
+            <button id="btn-request-motion" class="secondary-btn" type="button">Cấp quyền / Cân bằng lại cảm biến</button>
           </fieldset>
           <fieldset><legend>Cảnh báo bằng giọng nói</legend>
             <label class="check-row"><input id="setting-voice-enabled" type="checkbox"> <span>Bật nhắc bằng giọng nói khi phát hiện rủi ro</span></label>

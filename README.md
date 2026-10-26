@@ -1,41 +1,43 @@
-# RoadSense One View — phiên bản thử nghiệm cho điện thoại
+# RoadSense One View · Tự cân bằng (v4)
 
-## Các tệp
-- `index.html`: giao diện dashboard và các bảng cài đặt, đồng bộ.
-- `style.css`: giao diện One View, thích ứng điện thoại dọc/ngang, theme sáng/tối.
-- `script.js`: GPS, dữ liệu cảm biến, lưu hành trình, cài đặt, xuất và tải lên GitHub.
-- `manifest.json`: thông tin cài PWA.
-- `sw.js`: bộ đệm offline (Service Worker).
-- `icons/`: icon PNG 192 và 512.
+Bản mã đầy đủ gồm `index.html`, `style.css`, `script.js`, `manifest.json`, `sw.js` và `icons/` (2 icon PNG). **Đã xóa hoàn toàn Wyn.** CSS/JS độc lập, không dùng CDN.
 
-**Đã xóa toàn bộ mã dành cho Wyn.** Không sử dụng Tailwind CDN hoặc thư viện JavaScript bên ngoài.
+## Thao tác chính — chỉ cần một nút ghi
 
-## Cách chạy đúng (đặc biệt để GPS hoạt động)
-1. Tải **toàn bộ thư mục** lên GitHub Pages, Netlify hoặc máy chủ **HTTPS**. Không mở file HTML bằng `file://` trên điện thoại.
-2. Trên điện thoại, mở URL HTTPS bằng Safari/Chrome; cấp quyền **vị trí chính xác** khi trang yêu cầu. Bật Dịch vụ vị trí trên hệ điều hành.
-3. Nhấn nút `GPS` để yêu cầu lại nếu đã cấp quyền mà vẫn không nhận tín hiệu. Xem thông báo chi tiết trong Cài đặt.
-4. Chạm `CÂN BẰNG` khi điện thoại đặt chắc chắn, đứng yên. Trên iPhone, trình duyệt có thể hỏi quyền **Motion & Orientation** khi bạn chạm.
-5. Nhấn `BẮT ĐẦU GHI` để lưu mẫu GPS. Sau khi dừng, vào biểu tượng `⇪` để xuất JSON hoặc tải lên GitHub.
-6. Thử `☾/☀` để đổi theme thủ công. Theme và cài đặt lưu cục bộ.
+1. Gắn điện thoại chắc chắn lên giá đỡ và **giữ yên khi mở web**. GPS sẽ tự xin quyền và cảm biến sẽ **tự đo mức nền/tự cân bằng** nếu được phép.
+2. Xem trạng thái **TỰ CÂN BẰNG**: “Đang tự cân bằng…” hoặc “Đã cân bằng tự động”. Nếu chưa có dữ liệu, cần kiểm tra quyền và hỗ trợ cảm biến của thiết bị.
+3. Nhấn **BẮT ĐẦU GHI** khi chuẩn bị di chuyển. Nhấn **DỪNG GHI** khi kết thúc. Chỉ khoảng thời gian giữa hai thao tác này mới được lưu thành hành trình GPS.
+4. Khi cần, nhấn ⇪ để **xuất JSON** hoặc tải hành trình lên GitHub, hoặc ⚙ để thử tham số.
 
-## Cần biết
-- Bảng điều khiển thiết kế không cuộn; cửa sổ Cài đặt có cuộn để đủ nhiều tham số.
-- Thông số `Mức gợi ý` là **giá trị tham khảo tính bằng quy tắc thử nghiệm**, không biết giới hạn tốc độ thực tế trên đường và không tự động lấy dữ liệu biển báo. Không dùng số đó thay thế luật giao thông.
-- Độ xóc và bán kính cua là phép ước tính, phụ thuộc loại thiết bị, tư thế cố định máy, tần suất và độ chính xác cảm biến/GPS.
-- Số `--` là **chưa có dữ liệu**, tuyệt đối không phải `0` hay giả lập.
-- Khoảng cách tới điểm xóc chỉ xuất hiện nếu đã phát hiện và lưu điểm xóc trong một lần ghi trước; GPS phải đủ tốt. Các vị trí này không được kiểm chứng và có thể sai số lớn.
-- Trình duyệt trên điện thoại có thể giới hạn GPS, cảm biến, giọng nói hoặc ghi dữ liệu khi màn hình tắt, khi chạy nền, khi pin yếu. Wake Lock có dùng nếu trình duyệt hỗ trợ, không bảo đảm chạy nền.
-- Hành trình được lưu tại **IndexedDB** của trình duyệt và có thể bị xóa nếu dọn dữ liệu trang, dùng chế độ ẩn danh hoặc gỡ ứng dụng. Hãy thường xuyên **xuất JSON**.
-- Cấu hình và điểm xóc lưu trong localStorage (gắn với website). GitHub token không lưu trong localStorage, chỉ cần nhập lúc tải lên. Không đặt token vào mã, không đưa dữ liệu vị trí vào GitHub public nếu muốn giữ riêng tư.
-- GitHub upload chỉ chạy khi **có mạng**, cần repo có sẵn và fine-grained token cấp `Contents: Read and write`. Mỗi lần tải lên sinh một tệp mới trong thư mục `trips/`.
-- Nếu vẫn thấy phiên bản cũ, gỡ PWA đã cài hoặc xóa dữ liệu cache của tên miền sau khi triển khai.
+**Điện thoại iPhone/Safari:** iOS có thể yêu cầu bạn chạm **BẮT ĐẦU GHI** hoặc **Cấp quyền / Cân bằng lại cảm biến** trong Cài đặt để cho phép nhận `devicemotion`. Trang web không được phép tự mở hộp thoại cấp quyền cảm biến mà không có cử chỉ người dùng. Nếu trình duyệt vừa cấp quyền khi bạn nhấn BẮT ĐẦU, hãy **giữ xe đứng yên cho tới khi hiện “Đã cân bằng tự động”** rồi mới di chuyển. Nếu trình duyệt không cung cấp cảm biến, dữ liệu đo xóc sẽ để trống, không tạo dữ liệu giả.
 
-## Thử cục bộ trên máy tính
+## Các điểm thay đổi v4
+
+- **Tự cân bằng:** chạy khi mở ứng dụng, lấy mẫu cảm biến nếu thiết bị có tín hiệu. Kiểm tra độ ổn định của các mẫu; nếu máy rung mạnh thì chờ đứng yên, không báo cân bằng thành công giả.
+- **Một nút ghi chính:** thay nút CÂN BẰNG bằng **ô trạng thái tự cân bằng**, còn nút BẮT ĐẦU GHI chuyển thành DỪNG GHI khi đang ghi.
+- **Ba chế độ cùng hàng:** Thoải mái · Cân bằng · Thể thao (chọn trực tiếp, lưu cài đặt).
+- **Chi tiết GPS:** hai hàng “GPS tốt / 1.0 Hz · ±8 m” (chỉ là ví dụ). **Hz là số lần cập nhật vị trí mỗi giây, không phải Mbps.** Khi trình duyệt hỗ trợ, cửa sổ Cài đặt cũng có ước tính băng thông **Internet** (Mbps) được gắn nhãn riêng; đây không phải tốc độ truyền dữ liệu GPS.
+- **Giảm chớp popup:** bỏ `backdrop-filter`, không tự focus vào ô nhập liệu khiến bàn phím bật lên, hạn chế vẽ lại bảng điều khiển khi popup mở, không đóng hộp thoại khi chạm nhầm vùng nền.
+- **PWA cache v4:** đổi cache để trình duyệt tải phiên bản mới.
+
+## Cài web và GPS
+
+1. Upload **toàn bộ các tệp** lên website HTTPS (ví dụ GitHub Pages, Netlify). Không mở `file://` hay web HTTP nội bộ trên điện thoại.
+2. Cấp quyền **vị trí chính xác**, bật dịch vụ vị trí trên máy; có thể chạm ô GPS ở trên nếu muốn thử kết nối lại.
+3. Nếu cài PWA từ bản cũ, sau khi thay tệp hãy làm mới trang; nếu vẫn thấy bản cũ, xóa dữ liệu web của tên miền hoặc gỡ/cài lại PWA. Việc xóa dữ liệu website cũng xóa dữ liệu hành trình lưu trên máy: **xuất JSON trước khi xóa**.
+4. Nên sử dụng nút đổi giao diện sáng/tối ở thanh trên.
+
+## Kỹ thuật và an toàn
+
+- Lịch sử hành trình lưu vào **IndexedDB**; cấu hình và điểm xóc vào `localStorage`. Việc tắt màn hình hoặc chuyển app có thể làm trình duyệt ngừng cung cấp GPS/cảm biến. Wake Lock chỉ hỗ trợ giữ sáng trên trình duyệt phù hợp.
+- Phần GitHub yêu cầu token cá nhân có quyền Contents: Read and write của repo; token chỉ nằm trong ô nhập của phiên hiện tại, không ghi vào bộ nhớ cục bộ. Tránh upload vị trí cá nhân vào repo công khai.
+- Số **tốc độ gợi ý** là kết quả thuật toán **thử nghiệm** và không đọc giới hạn pháp lý, biển báo hoặc dữ liệu đường được xác minh. Cảm biến có sai số do vị trí gắn máy và chất lượng GPS.
+- Chỉ thao tác với điện thoại **khi xe đã dừng an toàn hoặc có hành khách thao tác**.
+
+## Thử trên máy tính
+
 ```bash
-cd RoadSense_OneView
+cd RoadSense_OneView_Auto
 python -m http.server 8000
 ```
-Mở `http://localhost:8000`. GPS trên **điện thoại** không hoạt động qua địa chỉ HTTP nội bộ thông thường; cần HTTPS.
-
-## Lưu ý an toàn
-**Chỉ thử khi dừng xe hoặc có người khác thao tác.** Không sử dụng điện thoại khi đang điều khiển phương tiện. Phần mềm đang ở dạng thử nghiệm, không phải thiết bị hỗ trợ an toàn đã được kiểm định.
+Mở `http://localhost:8000` và cấp quyền vị trí nếu cần. Máy tính thường không có cảm biến `devicemotion` như điện thoại.
