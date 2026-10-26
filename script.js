@@ -18,7 +18,7 @@
   const STORE_NAME = 'trips';
   const G = 9.80665;
   const DEFAULTS = Object.freeze({
-    theme: 'auto', fontSize: 'normal', uiScale: 100, mode: 'balanced',
+    theme: 'auto', fontSize: 'normal', recSpeedSize: 68, gpsSpeedSize: 64, uiScale: 100, mode: 'balanced',
     baseSpeed: 50, minSpeed: 15, maxSpeed: 90, lateralAccel: 1.6,
     vibrationThreshold: 0.35, vibrationPenalty: 15, warningRadius: 150,
     rememberBumps: true, highAccuracy: true, gpsTimeout: 15,
@@ -27,7 +27,7 @@
     voiceInterval: 12, voiceRate: 1.0, voiceMargin: 10
   });
   const FIELDS = {
-    theme: 'setting-theme', fontSize: 'setting-font-size', uiScale: 'setting-ui-scale',
+    theme: 'setting-theme', recSpeedSize: 'setting-rec-speed-size', gpsSpeedSize: 'setting-gps-speed-size', uiScale: 'setting-ui-scale',
     mode: 'setting-mode', baseSpeed: 'setting-base-speed', minSpeed: 'setting-min-speed',
     maxSpeed: 'setting-max-speed', lateralAccel: 'setting-lateral-accel',
     vibrationThreshold: 'setting-vibration-threshold', vibrationPenalty: 'setting-vibration-penalty',
@@ -64,9 +64,12 @@
     }
     if (!['auto','dark','light'].includes(safe.theme)) safe.theme = 'auto';
     if (!['normal','large','extra'].includes(safe.fontSize)) safe.fontSize = 'normal';
+    // Chuyển cỡ số từ bản v5 (select chung) sang 2 giá trị riêng mà không mất cấu hình cũ.
+    if (obj.recSpeedSize === undefined) safe.recSpeedSize = ({normal:68,large:78,extra:90})[safe.fontSize];
+    if (obj.gpsSpeedSize === undefined) safe.gpsSpeedSize = ({normal:64,large:72,extra:84})[safe.fontSize];
     if (!Object.hasOwn(MODES, safe.mode)) safe.mode = 'balanced';
     const constraints = {
-      uiScale:[80,115], baseSpeed:[10,120], minSpeed:[5,70], maxSpeed:[20,130],
+      recSpeedSize:[34,110], gpsSpeedSize:[34,110], uiScale:[60,200], baseSpeed:[10,120], minSpeed:[5,70], maxSpeed:[20,130],
       lateralAccel:[0.6,3.5], vibrationThreshold:[0.1,2], vibrationPenalty:[0,40],
       warningRadius:[30,1000], gpsTimeout:[5,60], gpsMaxAge:[0,30],
       gpsMaxAccuracy:[10,300], speedSmoothing:[0.1,1], vibrationSmoothing:[0.05,1],
@@ -102,6 +105,8 @@
       else el.value = source[key];
     }
     $('setting-ui-scale-val').textContent = `${source.uiScale}%`;
+    $('setting-rec-speed-size-val').textContent = `${source.recSpeedSize} px`;
+    $('setting-gps-speed-size-val').textContent = `${source.gpsSpeedSize} px`;
   }
   function readForm() {
     const value = {};
@@ -119,9 +124,15 @@
   function applyAppearance() {
     const theme = resolvedTheme();
     document.documentElement.dataset.theme = theme;
-    document.documentElement.style.setProperty('--ui-scale', String(settings.uiScale / 100));
-    const size = { normal:'clamp(2.4rem, 10.8vw, 5.3rem)', large:'clamp(2.7rem, 11.6vw, 5.8rem)', extra:'clamp(3rem, 12.5vw, 6.2rem)' };
-    document.documentElement.style.setProperty('--number-size', size[settings.fontSize]);
+    const factor = settings.uiScale / 100;
+    document.documentElement.style.setProperty('--ui-scale', String(factor));
+    document.documentElement.style.setProperty('--rec-speed-font', `${Math.round(settings.recSpeedSize * factor)}px`);
+    document.documentElement.style.setProperty('--gps-speed-font', `${Math.round(settings.gpsSpeedSize * factor)}px`);
+    document.documentElement.style.setProperty('--metric-font', `${Math.round(31 * factor)}px`);
+    document.documentElement.style.setProperty('--scale-percent', `${settings.uiScale}%`);
+    // Lớn hơn One View: cho phép cuộn trong bảng điều khiển, không cắt nội dung.
+    $('dashboard').classList.toggle('expanded-zoom', settings.uiScale > 115);
+    document.documentElement.dataset.zoom = String(settings.uiScale);
     $('btn-theme').textContent = theme === 'dark' ? '☀' : '☾';
     $('btn-theme').title = theme === 'dark' ? 'Chuyển giao diện sáng' : 'Chuyển giao diện tối';
     $('browser-theme-color').content = theme === 'dark' ? '#0c1425' : '#e9eff7';
@@ -408,6 +419,34 @@
     state.recommended = Math.round(clamp(speed,settings.minSpeed,settings.maxSpeed));
     state.recReason = reason;
   }
+  function voiceMessage() {
+    return `Chú ý. Tốc độ tham khảo ${Math.round(state.recommended)} ki lô mét một giờ.`;
+  }
+  function previewVoice() {
+    const status = $('voice-preview-status');
+    if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+      status.textContent = 'Trình duyệt này không hỗ trợ đọc văn bản thành tiếng.';
+      return;
+    }
+    calculateRecommendation();
+    const rate = clamp(Number($('setting-voice-rate').value) || 1, 0.7, 1.5);
+    const utterance = new SpeechSynthesisUtterance(voiceMessage());
+    utterance.lang = 'vi-VN';
+    utterance.rate = rate;
+    const vietnameseVoice = window.speechSynthesis.getVoices().find(v => /^vi([-_]|$)/i.test(v.lang));
+    if (vietnameseVoice) utterance.voice = vietnameseVoice;
+    status.textContent = 'Đang yêu cầu phát giọng nói…';
+    utterance.onstart = () => { status.textContent = `Đang nghe thử giọng Việt · tốc độ ${rate.toFixed(1)}×`; };
+    utterance.onend = () => { status.textContent = 'Đã kết thúc bản nghe thử.'; };
+    utterance.onerror = e => {
+      if (e.error !== 'canceled' && e.error !== 'interrupted') status.textContent = `Không phát được giọng nói (${e.error || 'không rõ'}). Kiểm tra âm lượng và giọng đọc trên máy.`;
+    };
+    try {
+      window.speechSynthesis.cancel();
+      // Phải gọi trực tiếp trong tương tác chạm để Safari/Chrome cho phép phát.
+      window.speechSynthesis.speak(utterance);
+    } catch (err) { status.textContent = `Không phát được: ${err.message}`; }
+  }
   function maybeSpeak() {
     calculateRecommendation();
     const hazard = state.nearestEvent || state.recReason !== 'Mức tham chiếu cài đặt';
@@ -415,7 +454,7 @@
         state.speed === null || state.speed < state.recommended + settings.voiceMargin ||
         Date.now()-state.lastVoiceAt < settings.voiceInterval*1000 || !('speechSynthesis' in window)) return;
     state.lastVoiceAt = Date.now();
-    const utterance = new SpeechSynthesisUtterance(`Chú ý. Tốc độ tham khảo ${state.recommended} ki lô mét một giờ.`);
+    const utterance = new SpeechSynthesisUtterance(voiceMessage());
     utterance.lang = 'vi-VN';
     utterance.rate = settings.voiceRate;
     window.speechSynthesis.cancel();
@@ -432,9 +471,13 @@
       const selected = btn.dataset.mode === settings.mode;
       if (btn.getAttribute('aria-pressed') !== String(selected)) btn.setAttribute('aria-pressed',String(selected));
     });
-    $('rec-speed').textContent = state.recommended;
+    const recommendedText = String(state.recommended);
+    const actualText = state.gpsState === 'ok' && state.speed !== null ? String(Math.round(state.speed)) : '--';
+    $('rec-speed').textContent = recommendedText;
+    $('rec-speed').parentElement.classList.toggle('triple-digit', recommendedText.length >= 3);
     $('rec-reason').textContent = state.recReason;
-    $('curr-speed').textContent = state.gpsState === 'ok' && state.speed !== null ? Math.round(state.speed) : '--';
+    $('curr-speed').textContent = actualText;
+    $('curr-speed').parentElement.classList.toggle('triple-digit', actualText.length >= 3);
     $('gps-accuracy-hint').textContent = state.gpsState === 'ok' ? `Sai số ±${Math.round(state.gpsAccuracy)} m` : 'Đợi dữ liệu vị trí';
     $('vibration-score').textContent = state.vibration === null ? '--' : state.vibration.toFixed(2);
     $('sensor-state').textContent = state.calibrationStatus === 'ready' && state.vibration !== null ?
@@ -662,6 +705,9 @@
       scheduleRender();
     }));
     $('setting-ui-scale').addEventListener('input',e=>{ $('setting-ui-scale-val').textContent=`${e.target.value}%`; });
+    $('setting-rec-speed-size').addEventListener('input',e=>{ $('setting-rec-speed-size-val').textContent=`${e.target.value} px`; });
+    $('setting-gps-speed-size').addEventListener('input',e=>{ $('setting-gps-speed-size-val').textContent=`${e.target.value} px`; });
+    $('btn-voice-preview').addEventListener('click',previewVoice);
     $('btn-reset-settings').addEventListener('click',()=>fillForm(DEFAULTS));
     $('settings-form').addEventListener('submit',e=>{
       e.preventDefault();

@@ -1,8 +1,33 @@
-# RoadSense One View v5 — GitHub tăng dần (phương án C)
+# RoadSense One View v6 — Tuỳ chỉnh giao diện & nghe thử giọng nói (tiếp nối v5)
 
 **Repository mặc định:** https://github.com/gptlohoi-del/RoadSense2
 
 Đây là bộ mã nguồn PWA độc lập, không cần Tailwind/CDN. Đã loại bỏ Wyn. v5 giữ giao diện One View, chế độ Thoải mái/Cân bằng/Thể thao, tự cân bằng cảm biến, GPS, cảnh báo thử nghiệm, sáng/tối.
+
+
+## Điểm mới v6 (so với v5)
+
+- **CÀI ĐẶT**: nút **LƯU** nằm trên thanh tiêu đề, ngay cạnh **✕**; nút **Mặc định** vẫn ở cuối hộp thoại. Nút LƯU gửi biểu mẫu bằng thuộc tính `form="settings-form"` nên hoạt động dù ở ngoài form.
+- **Nghe thử cảnh báo**: nút `🔊 NGHE THỬ` ở nhóm Cảnh báo bằng giọng nói. Đọc thử câu cảnh báo theo tốc độ đang nhập, kể cả khi chưa bật cảnh báo; dùng giọng Việt nếu hệ điều hành có. Nếu không phát, kiểm tra âm lượng, quyền phát và giọng tiếng Việt.
+- **Thu phóng nội dung 60–200%**: thay đổi kích thước nội dung dashboard. Mức 100% ưu tiên One View; mức cao có thể **cuộn dashboard** thay vì bị cắt mất nội dung trên màn hình nhỏ. Cửa sổ Cài đặt luôn có thể cuộn độc lập.
+- **Hai cỡ số độc lập**: Cỡ số MỨC GỢI Ý và TỐC ĐỘ GPS điều chỉnh qua thanh trượt 34–110 px; giá trị lưu riêng. CSS giới hạn cỡ chữ khi cần để tránh tràn màn hình quá hẹp.
+- **Giữ tương thích**: vẫn dùng `roadsense_settings_v3`, tự chuyển giá trị cỡ chữ kiểu cũ sang cỡ số mới. Không thay đổi dữ liệu hành trình hay bộ đồng bộ GitHub của v5.
+
+### Những tệp được sửa ở v6
+
+| Tệp | Nội dung |
+|---|---|
+| `index.html` | Đưa LƯU cạnh ✕, đổi tiêu đề CÀI ĐẶT, bổ sung nghe thử, hai thanh cỡ tốc độ, thu phóng 60–200%. |
+| `style.css` | Điều chỉnh kiểu modal, tăng ưu tiên hiển thị tốc độ, hỗ trợ zoom lớn không cắt chữ. |
+| `script.js` | Lưu/cập nhật hai cỡ số riêng, thu phóng 60–200%, phát thử cảnh báo bằng giọng nói. |
+| `sw.js` | Tăng phiên bản cache PWA để tải bản mới. |
+| `archive.js` | **Không sửa** (đồng bộ GitHub và định dạng dữ liệu vẫn như v5). |
+| `manifest.json`, `icons/*.png` | **Không sửa**. |
+| `README.md` | Thêm hướng dẫn và danh sách thay đổi. |
+
+### Cập nhật website
+
+Đưa `index.html`, `style.css`, `script.js`, `sw.js` mới lên GitHub Pages; giữ nguyên `archive.js`, `manifest.json`, `icons`. Tải lại trang/PWA để nhận giao diện mới. Không xóa dữ liệu website (IndexedDB/localStorage) vì đang lưu hành trình và có thể đang lưu token theo lựa chọn của bạn.
 
 ## Hướng dẫn sử dụng nhanh
 

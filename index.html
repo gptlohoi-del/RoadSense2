@@ -97,14 +97,22 @@
 
   <div id="settings-modal" class="overlay" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <div class="modal-header"><h2 id="settings-title">⚙ Cài đặt thử nghiệm</h2><button id="close-settings" class="icon-btn close-btn" type="button" aria-label="Đóng cài đặt">✕</button></div>
+      <div class="modal-header settings-header">
+        <h2 id="settings-title">⚙ CÀI ĐẶT</h2>
+        <div class="modal-header-actions">
+          <button id="save-settings" class="primary-btn header-save-btn" type="submit" form="settings-form" title="Lưu thay đổi">LƯU</button>
+          <button id="close-settings" class="icon-btn close-btn" type="button" aria-label="Đóng cài đặt">✕</button>
+        </div>
+      </div>
       <form id="settings-form" class="modal-form">
         <div class="modal-scroll">
           <p class="helper">Các giá trị là tham số thử nghiệm, không phải giới hạn tốc độ pháp lý. Thay đổi được lưu trên thiết bị này.</p>
           <fieldset><legend>Giao diện</legend>
             <label class="field"><span>Giao diện màu</span><select id="setting-theme"><option value="auto">Theo hệ thống</option><option value="dark">Tối</option><option value="light">Sáng</option></select></label>
-            <label class="field"><span>Cỡ số tốc độ gợi ý</span><select id="setting-font-size"><option value="normal">Vừa</option><option value="large">Lớn</option><option value="extra">Rất lớn</option></select></label>
-            <label class="field"><span>Thu phóng nội dung (80–115%)</span><input id="setting-ui-scale" type="range" min="80" max="115" step="5"><output id="setting-ui-scale-val" for="setting-ui-scale">100%</output></label>
+            <label class="field"><span>Cỡ số MỨC GỢI Ý (34–110 px)</span><input id="setting-rec-speed-size" type="range" min="34" max="110" step="2"><output id="setting-rec-speed-size-val" for="setting-rec-speed-size">68 px</output></label>
+            <label class="field"><span>Cỡ số TỐC ĐỘ GPS (34–110 px)</span><input id="setting-gps-speed-size" type="range" min="34" max="110" step="2"><output id="setting-gps-speed-size-val" for="setting-gps-speed-size">64 px</output></label>
+            <label class="field"><span>Thu phóng nội dung (60–200%)</span><input id="setting-ui-scale" type="range" min="60" max="200" step="5"><output id="setting-ui-scale-val" for="setting-ui-scale">100%</output></label>
+            <p class="helper">Ở mức thu phóng lớn, màn hình chính có thể cuộn để tránh cắt mất các chỉ số. Mức 100% ưu tiên One View.</p>
           </fieldset>
           <fieldset><legend>Tốc độ & đường</legend>
             <label class="field"><span>Chế độ</span><select id="setting-mode"><option value="comfort">Thoải mái</option><option value="balanced">Cân bằng</option><option value="sport">Thể thao</option></select></label>
@@ -134,9 +142,13 @@
             <label class="field"><span>Khoảng nghỉ giữa 2 cảnh báo (giây)</span><input id="setting-voice-interval" type="number" min="5" max="90" step="1"></label>
             <label class="field"><span>Tốc độ đọc (0.7–1.5)</span><input id="setting-voice-rate" type="number" min="0.7" max="1.5" step="0.1"></label>
             <label class="field"><span>Biên độ vượt mức gợi ý (km/h)</span><input id="setting-voice-margin" type="number" min="0" max="30" step="1"></label>
+            <div class="voice-preview-row">
+              <button id="btn-voice-preview" class="secondary-btn" type="button">🔊 NGHE THỬ</button>
+              <span id="voice-preview-status" class="preview-hint" role="status" aria-live="polite">Nghe thử với tốc độ đọc đang chọn, không cần bật cảnh báo.</span>
+            </div>
           </fieldset>
         </div>
-        <div class="modal-footer"><button id="btn-reset-settings" class="secondary-btn" type="button">Mặc định</button><button id="save-settings" class="primary-btn" type="submit">Lưu cấu hình</button></div>
+        <div class="modal-footer"><button id="btn-reset-settings" class="secondary-btn" type="button">Mặc định</button><span class="footer-save-space" aria-hidden="true"></span></div>
       </form>
     </div>
   </div>
