@@ -200,3 +200,10 @@ legend { color:var(--accent); font-weight:800; font-size:13px; padding:0 7px; }
   .mode-options { gap:2px; }
   .mode-option { font-size:8.5px; padding:5px 3px; }
 }
+
+/* RoadSense v5 — GitHub connection and archive controls */
+.repo-link { display:inline-block; margin:2px 0 12px; color:var(--accent); font-size:12px; text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; }
+.field input[readonly] { opacity:.9; border-style:dashed; }
+.sync-body .diagnostics { margin:10px 0; }
+.sync-body fieldset { margin-top:12px; }
+.sync-body .check-row strong { color:var(--warn); font-weight:650; }

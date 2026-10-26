@@ -1,8 +1,8 @@
 {
   "id": "./index.html",
-  "name": "RoadSense One View",
+  "name": "RoadSense",
   "short_name": "RoadSense",
-  "description": "Theo dõi thử nghiệm GPS và cảm biến, lưu hành trình cục bộ.",
+  "description": "Theo dõi thử nghiệm GPS và cảm biến, lưu hành trình và đồng bộ tăng dần lên GitHub.",
   "lang": "vi",
   "start_url": "./index.html",
   "scope": "./",

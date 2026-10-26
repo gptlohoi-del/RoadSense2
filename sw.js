@@ -1,7 +1,7 @@
 /* RoadSense offline shell. Không cache yêu cầu GitHub hay dữ liệu API cá nhân. */
-const CACHE_NAME = 'roadsense-oneview-v4-auto';
+const CACHE_NAME = 'roadsense-oneview-v5-archive';
 const SHELL = [
-  './index.html', './style.css', './script.js', './manifest.json',
+  './index.html', './style.css', './archive.js', './script.js', './manifest.json',
   './icons/icon-192.png', './icons/icon-512.png'
 ];
 

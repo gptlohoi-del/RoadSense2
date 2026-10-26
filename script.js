@@ -5,6 +5,16 @@
   const SETTINGS_KEY = 'roadsense_settings_v3';
   const EVENTS_KEY = 'roadsense_road_events_v3';
   const DB_NAME = 'RoadSenseDB';
+  const GH_TOKEN_KEY = 'roadsense_gh_token_device_v5';
+  const SYNC_PREF_KEY = 'roadsense_sync_prefs_v5';
+  const ARCHIVE = window.RoadSenseArchive;
+  const GH_REPO = ARCHIVE.REPO;
+  let tokenInSession = '';
+  let syncPrefs = {auto:true,interval:3,uploadOnStop:true,rememberToken:false, ...readSafeSyncPrefs()};
+  if(![2,3,5,10,15].includes(Number(syncPrefs.interval))) syncPrefs.interval=3;
+  for(const flag of ['auto','uploadOnStop','rememberToken']) syncPrefs[flag]=syncPrefs[flag]===true;
+  function readSafeSyncPrefs() { try { const raw=JSON.parse(localStorage.getItem(SYNC_PREF_KEY)); return raw && typeof raw==='object' ? raw : {}; } catch {return {}; } }
+
   const STORE_NAME = 'trips';
   const G = 9.80665;
   const DEFAULTS = Object.freeze({
@@ -81,7 +91,8 @@
     lastDashboardRenderAt: 0, isRecording: false, activeTrip: null, db: null,
     wakeLock: null, nearestEvent: null, recommended: settings.baseSpeed,
     recReason: 'Theo mức cấu hình', lastVoiceAt: 0, lastBumpAt: 0,
-    uploadBusy: false, lastNotice: '', renderPending: false
+    uploadBusy: false, recordBusy:false, lastNotice: '', renderPending: false,
+    lastMotionRecordAt:0, lastAutoSyncAt:Date.now(), archiveReady:false
   };
 
   function fillForm(source) {
@@ -183,6 +194,7 @@
   }
   function onGpsError(e) {
     state.speed = null;
+    if(state.isRecording) ARCHIVE.record({kind:'gps_error',at:Date.now(),code:e.code||null,message:e.message||''});
     const messages = {
       1:'Quyền vị trí bị từ chối. Kiểm tra quyền vị trí trong trình duyệt/cài đặt máy.',
       2:'Điện thoại chưa xác định được vị trí. Thử ra ngoài trời và bật độ chính xác cao.',
@@ -193,7 +205,16 @@
   function onPosition(pos) {
     const c = pos.coords;
     if (!finite(c.latitude) || !finite(c.longitude)) return;
-    if (!finite(c.accuracy) || c.accuracy > settings.gpsMaxAccuracy) {
+    const badAccuracy = !finite(c.accuracy) || c.accuracy > settings.gpsMaxAccuracy;
+    if (state.isRecording) ARCHIVE.record({kind:'gps',at:pos.timestamp||Date.now(),receivedAt:Date.now(),
+      quality:badAccuracy?'rejected_accuracy':'ok',
+      coords:{latitude:c.latitude,longitude:c.longitude,accuracy:finite(c.accuracy)?c.accuracy:null,
+        altitude:finite(c.altitude)?c.altitude:null,altitudeAccuracy:finite(c.altitudeAccuracy)?c.altitudeAccuracy:null,
+        speed:finite(c.speed)?c.speed:null,heading:finite(c.heading)?c.heading:null},
+      speedKmh:finite(c.speed)?c.speed*3.6:null,speedSource:'gps.coords.speed',
+      calibration:state.calibrationStatus,
+      mode:settings.mode,settingsMaxAccuracyM:settings.gpsMaxAccuracy});
+    if (badAccuracy) {
       state.speed = null;
       setGps('weak', `Sai số GPS ±${Math.round(c.accuracy || 9999)} m vượt ngưỡng ${settings.gpsMaxAccuracy} m.`,c.accuracy);
       return;
@@ -248,9 +269,7 @@
       if (prev && moved !== null && dt && moved >= Math.max(5,(fix.accuracy+prev.accuracy)*.5) && moved <= Math.min(500,dt*75)) {
         trip.distanceKm += moved/1000;
       }
-      if (!trip.samples.length || fix.at - trip.samples[trip.samples.length-1].at >= 1000) {
-        if (trip.samples.length < 15000) trip.samples.push({ ...fix, speedKmh: state.speed === null ? null : Math.round(state.speed*10)/10, vibrationG:state.vibration });
-      }
+      trip.gpsCount++; // Bản gốc GPS được lưu đầy đủ trong kho v5; không giới hạn 15.000 mẫu.
     }
     state.nearestEvent = findUpcomingEvent();
     maybeSpeak();
@@ -299,6 +318,17 @@
     const now = Date.now();
     state.motionReceived = true;
     state.sensorAt = now;
+    // Lưu gia tốc 3 trục gốc tối đa 20Hz; giữ cả dữ liệu trước khi tự cân bằng.
+    if (state.isRecording && now-state.lastMotionRecordAt >= 50) {
+      state.lastMotionRecordAt=now;
+      ARCHIVE.record({kind:'motion',at:now,eventTimeStampMs:Number.isFinite(e.timeStamp)?e.timeStamp:null,
+        intervalMs:finite(e.interval)?e.interval:null,
+        acceleration:{x:finite(a?.x)?a.x:null,y:finite(a?.y)?a.y:null,z:finite(a?.z)?a.z:null},
+        accelerationIncludingGravity:{x:finite(gravity?.x)?gravity.x:null,y:finite(gravity?.y)?gravity.y:null,z:finite(gravity?.z)?gravity.z:null},
+        rotationRate:{alpha:finite(e.rotationRate?.alpha)?e.rotationRate.alpha:null,
+          beta:finite(e.rotationRate?.beta)?e.rotationRate.beta:null,gamma:finite(e.rotationRate?.gamma)?e.rotationRate.gamma:null},
+        vibrationG:state.vibration,calibration:state.calibrationStatus,mode:settings.mode});
+    }
 
     if (state.calibrating) {
       if (!state.calibrationStartedAt) state.calibrationStartedAt = now;
@@ -317,6 +347,7 @@
           state.calibrating = false;
           state.lastCalibrationAt = now;
           state.calibrationSamples=[];
+          ARCHIVE.record({kind:'calibration',at:now,status:'ready',gravityBaseMps2:state.gravityBase,hasGravity,sampleCount:values.length});
           setCalibrationStatus('ready','Đã cân bằng tự động');
         }
       }
@@ -335,6 +366,8 @@
         state.gpsState === 'ok' && state.lastFix && now-state.lastBumpAt > 15000 &&
         state.speed !== null && state.speed >= 8) {
       state.lastBumpAt = now;
+      ARCHIVE.record({kind:'road_event',at:now,source:'sensor_estimate',shockG:raw,
+        latitude:state.lastFix.lat,longitude:state.lastFix.lng,accuracyM:state.lastFix.accuracy});
       events.push({ lat:state.lastFix.lat, lng:state.lastFix.lng, at:now, shockG:Math.round(raw*100)/100 });
       events=events.slice(-300);
       writeJSON(EVENTS_KEY,events);
@@ -409,7 +442,7 @@
     $('curve-radius').textContent = state.curveRadius === null ? '--' : Math.round(state.curveRadius);
     $('countdown-value').textContent = state.nearestEvent ? Math.round(state.nearestEvent.distance) : '--';
     $('trip-distance').textContent = (state.activeTrip?.distanceKm || 0).toFixed(2);
-    $('trip-count').textContent = state.isRecording ? `${state.activeTrip?.samples.length || 0} mẫu GPS` : 'Ghi khi nhấn BẮT ĐẦU';
+    $('trip-count').textContent = state.isRecording ? `${ARCHIVE.counts().gps} mẫu GPS · đang lưu` : 'Ghi khi nhấn BẮT ĐẦU';
     const alert = $('alert-panel');
     let heading = 'Sẵn sàng', detail = 'Nhấn BẮT ĐẦU GHI để lưu hành trình.', warn = false;
     if (state.gpsState !== 'ok') {
@@ -426,7 +459,7 @@
       warn = true;
     } else if (state.isRecording) {
       heading = 'Đang ghi hành trình';
-      detail = 'Dữ liệu GPS được lưu cục bộ; có thể xuất JSON khi dừng.';
+      detail = 'Đang lưu cục bộ; có thể Upload ngay mà không cần dừng ghi.';
     } else {
       heading = 'GPS sẵn sàng';
       detail = 'Có thể bắt đầu ghi. Mức gợi ý hiện tại là giá trị cấu hình.';
@@ -446,10 +479,14 @@
     return new Promise(resolve => {
       if (!('indexedDB' in window)) { resolve(null); return; }
       try {
-        const req = indexedDB.open(DB_NAME,1);
+        const req = indexedDB.open(DB_NAME,2);
         req.onupgradeneeded = () => {
           if (!req.result.objectStoreNames.contains(STORE_NAME))
             req.result.createObjectStore(STORE_NAME,{keyPath:'id',autoIncrement:true});
+          if (!req.result.objectStoreNames.contains('archiveSessions'))
+            req.result.createObjectStore('archiveSessions',{keyPath:'id'});
+          if (!req.result.objectStoreNames.contains('archiveChunks'))
+            req.result.createObjectStore('archiveChunks',{keyPath:'key'});
         };
         req.onsuccess = () => { state.db=req.result; resolve(state.db); };
         req.onerror = () => resolve(null);
@@ -484,88 +521,128 @@
     catch { /* một số trình duyệt không hỗ trợ Wake Lock */ }
   }
   async function toggleRecording() {
-    state.isRecording = !state.isRecording;
-    if (state.isRecording) {
-      state.activeTrip = { id:Date.now(),startedAt:new Date().toISOString(),endedAt:null,distanceKm:0,samples:[] };
-      $('record-label').textContent = '■ DỪNG GHI';
-      $('record-subtext').textContent = 'Đang lưu dữ liệu trên máy';
-      $('btn-record').classList.add('active');
-      // Với iPhone, quyền cảm biến chỉ có thể xin từ lần nhấn BẮT ĐẦU.
-      // Để máy đứng yên đến khi tự cân bằng xong, rồi mới di chuyển.
-      if (state.calibrationStatus !== 'ready') {
-        requestMotionAccess().then(msg => {
-          if (msg.includes('chưa') || msg.includes('không') || msg.includes('Lỗi'))
-            setCalibrationStatus('unavailable','Cần cấp quyền cảm biến');
-        }).catch(()=>setCalibrationStatus('unavailable','Không truy cập được cảm biến'));
-      }
-      if (state.gpsState !== 'ok') startGPS();
-      await wakeUp();
-    } else {
-      $('record-label').textContent = '● BẮT ĐẦU GHI';
-      $('record-subtext').textContent = 'Lưu hành trình trên máy';
-      $('btn-record').classList.remove('active');
-      if (state.activeTrip) state.activeTrip.endedAt=new Date().toISOString();
-      await saveTrip();
-      try { await state.wakeLock?.release(); } catch { /* ignore */ }
-      state.wakeLock=null;
-    }
-    scheduleRender();
-  }
-  function dataset(trips) {
-    const merged = [...trips];
-    if (state.activeTrip && !merged.some(t => t.id===state.activeTrip.id)) merged.push(state.activeTrip);
-    return { app:'RoadSense One View', formatVersion:3, exportedAt:new Date().toISOString(), trips:merged, roadEvents:events };
-  }
-  async function exportJSON() {
-    const data = dataset(await readTrips());
-    const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href=url; a.download=`roadsense-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
-    document.body.appendChild(a); a.click(); a.remove();
-    window.setTimeout(()=>URL.revokeObjectURL(url),60000);
-    $('sync-status-box').textContent=`Đã chuẩn bị tệp JSON (${data.trips.length} hành trình, ${events.length} điểm xóc). Nếu không thấy tệp, kiểm tra mục Tải xuống của trình duyệt.`;
-  }
-  function utf8Base64(text) {
-    const bytes = new TextEncoder().encode(text);
-    let out='';
-    for (let i=0;i<bytes.length;i+=8192) out+=String.fromCharCode(...bytes.subarray(i,i+8192));
-    return btoa(out);
-  }
-  async function uploadGitHub() {
-    if (state.uploadBusy) return;
-    const repo = $('setting-gh-repo').value.trim();
-    const token = $('session-gh-token').value.trim();
-    const box = $('sync-status-box');
-    if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repo) || !token) {
-      box.textContent='Nhập repository dạng owner/repo và token hợp lệ.';
+    if (state.recordBusy || !state.archiveReady) {
+      if (!state.archiveReady) $('alert-detail').textContent='Bộ nhớ hành trình chưa sẵn sàng. Kiểm tra dung lượng hoặc quyền lưu dữ liệu.';
       return;
     }
-    writeJSON('roadsense_gh_repo_v3',repo); // không bao giờ ghi token
-    state.uploadBusy=true;
-    $('btn-start-upload').disabled=true;
-    box.textContent='Đang đóng gói JSON và kết nối GitHub API...';
+    state.recordBusy=true; $('btn-record').disabled=true;
     try {
-      const json=JSON.stringify(dataset(await readTrips()));
-      if (new TextEncoder().encode(json).length > 950000) throw new Error('Dữ liệu vượt 950 KB. Hãy xuất JSON, chia nhỏ hoặc dùng phương thức khác.');
-      const file=`trips/roadsense-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
-      const url=`https://api.github.com/repos/${repo}/contents/${file}`;
-      const response=await fetch(url,{
-        method:'PUT',
-        headers:{'Accept':'application/vnd.github+json','Authorization':`Bearer ${token}`,'X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'},
-        body:JSON.stringify({message:'Add RoadSense trip data',content:utf8Base64(json)})
-      });
-      const body=await response.json().catch(()=>({}));
-      if (!response.ok) throw new Error(`GitHub HTTP ${response.status}: ${body.message || 'không rõ lỗi'}`);
-      box.textContent=`Đã tải lên GitHub thành công: ${repo}/${file}. Hãy kiểm tra quyền riêng tư của repository.`;
-    } catch(e) { box.textContent=`Không thể tải lên: ${e.message}. Bạn có thể dùng nút Xuất JSON để sao lưu cục bộ.`; }
-    finally { state.uploadBusy=false; $('btn-start-upload').disabled=false; }
+      if (!state.isRecording) {
+        // iOS permission prompt MUST be initiated synchronously from user's click.
+        // Calling requestMotionAccess after awaiting IndexedDB loses user activation.
+        if(state.calibrationStatus!=='ready') requestMotionAccess().catch(()=>{});
+        // Start only after a durable session record is committed to IndexedDB.
+        await ARCHIVE.start(settings,{
+          userAgent:navigator.userAgent,language:navigator.language,
+          timezoneOffsetMinutes:new Date().getTimezoneOffset(),
+          viewport:{width:innerWidth,height:innerHeight,devicePixelRatio:devicePixelRatio},
+          secureContext:window.isSecureContext,
+          geolocationSupported:!!navigator.geolocation,
+          motionSupported:!!window.DeviceMotionEvent,
+          calibrationAtStart:{status:state.calibrationStatus,at:state.lastCalibrationAt||null,
+            gravityBaseMps2:state.gravityBase, vibrationG:state.vibration}
+        });
+        state.activeTrip={ startedAt:new Date().toISOString(),distanceKm:0,gpsCount:0 };
+        state.lastMotionRecordAt=0;
+        state.isRecording=true;
+        $('record-label').textContent='■ DỪNG GHI';
+        $('record-subtext').textContent='Đang lưu dữ liệu trên máy';
+        $('btn-record').classList.add('active');
+        if(state.gpsState!=='ok') startGPS();
+        await wakeUp();
+      } else {
+        // Disable new samples, then seal the last local chunk without losing existing data.
+        state.isRecording=false;
+        await ARCHIVE.stop();
+        $('record-label').textContent='● BẮT ĐẦU GHI';
+        $('record-subtext').textContent='Lưu hành trình trên máy';
+        $('btn-record').classList.remove('active');
+        try { await state.wakeLock?.release(); } catch {}
+        state.wakeLock=null;
+        if(syncPrefs.uploadOnStop && tokenInSession) void uploadGitHub(true);
+      }
+    } catch(err) {
+      if(ARCHIVE.isRecording()) state.isRecording=true; // Cho phép thử DỪNG GHI lại sau lỗi đĩa.
+      $('sync-status-box').textContent=`Lỗi lưu hành trình: ${err.message}`;
+      $('alert-detail').textContent=`Lỗi lưu hành trình: ${err.message}`;
+      // If writing the final chunk fails, do not claim it was saved.
+    } finally { state.recordBusy=false;$('btn-record').disabled=false; scheduleRender();updateArchiveStats(); }
+  }
+  function download(content,name,mime) {
+    const blob=new Blob([content],{type:mime}); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url;a.download=name;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }
+  async function exportJSON() {
+    const all=await ARCHIVE.exportData(await readTrips(),events);
+    download(JSON.stringify(all,null,2),`roadsense-full-backup-${Date.now()}.json`,'application/json;charset=utf-8');
+    $('sync-status-box').textContent=`Đã tạo bản sao lưu gồm ${all.sessions.length} hành trình v5, ${all.chunks.length} phần dữ liệu và ${all.legacyV4.trips.length} hành trình v4.`;
+  }
+  async function exportCSV() {
+    download(await ARCHIVE.exportCsv(),`roadsense-gps-${Date.now()}.csv`,'text/csv;charset=utf-8');
+    $('sync-status-box').textContent='Đã chuẩn bị CSV các mẫu GPS v5 để đối chiếu trong Excel.';
+  }
+  function updateTokenFromInput() {
+    tokenInSession=$('session-gh-token').value.trim();
+    if(syncPrefs.rememberToken) {
+      if(tokenInSession) localStorage.setItem(GH_TOKEN_KEY,tokenInSession);
+      else localStorage.removeItem(GH_TOKEN_KEY);
+    }
+  }
+  function applySyncPrefs() {
+    $('setting-auto-sync').checked=!!syncPrefs.auto;
+    $('setting-sync-interval').value=String([2,3,5,10,15].includes(Number(syncPrefs.interval))?syncPrefs.interval:3);
+    $('setting-upload-on-stop').checked=!!syncPrefs.uploadOnStop;
+    $('remember-gh-token').checked=!!syncPrefs.rememberToken;
+    $('setting-gh-repo').value=GH_REPO;
+    if(syncPrefs.rememberToken) tokenInSession=localStorage.getItem(GH_TOKEN_KEY)||'';
+    $('session-gh-token').value=tokenInSession;
+  }
+  function saveSyncPrefs() {
+    syncPrefs.auto=$('setting-auto-sync').checked;
+    syncPrefs.interval=Number($('setting-sync-interval').value)||3;
+    syncPrefs.uploadOnStop=$('setting-upload-on-stop').checked;
+    syncPrefs.rememberToken=$('remember-gh-token').checked;
+    localStorage.setItem(SYNC_PREF_KEY,JSON.stringify(syncPrefs));
+    updateTokenFromInput();
+    if(!syncPrefs.rememberToken) localStorage.removeItem(GH_TOKEN_KEY);
+    updateArchiveStats();
+  }
+  async function updateArchiveStats() {
+    if(!state.archiveReady) return;
+    try {
+      const x=await ARCHIVE.stats();
+      $('archive-stats').textContent=`Đã lưu: ${x.sessions} hành trình, ${x.chunks} phần dữ liệu · Chưa Upload: ${x.pending} phần`+
+        ` · Mẫu đang đợi lưu: ${x.unsaved}.`+
+        `\nTự đồng bộ: ${syncPrefs.auto?'Bật, mỗi '+syncPrefs.interval+' phút':'Tắt'} · Token: ${tokenInSession?'Đã nhập':'Chưa nhập'}.`;
+    } catch(e) { $('archive-stats').textContent=`Không đọc được trạng thái lưu trữ: ${e.message}`; }
+  }
+  async function uploadGitHub(background=false) {
+    if(state.uploadBusy) return;
+    updateTokenFromInput();
+    const box=$('sync-status-box');
+    if(!tokenInSession) {
+      if(!background) box.textContent='Bạn cần nhập GitHub Token để Upload. Dữ liệu vẫn được giữ trên điện thoại.';
+      return;
+    }
+    if(!navigator.onLine) {box.textContent='Mất Internet. Dữ liệu đang chờ đồng bộ, không bị xóa.';return;}
+    state.uploadBusy=true;$('btn-start-upload').disabled=true;
+    try {
+      const result=await ARCHIVE.sync(tokenInSession,msg=>box.textContent=msg);
+      if(result.skipped) return;
+      box.textContent=`Đồng bộ thành công: ${result.uploaded} phần dữ liệu mới lên ${GH_REPO}. `+
+        'Nếu đang ghi, những mẫu tiếp theo vẫn được thu thập và sẽ Upload ở lượt sau.';
+      if(result.link) { const a=$('last-upload-link');a.href=result.link;a.hidden=false; }
+      state.lastAutoSyncAt=Date.now();
+    } catch(err) {box.textContent=`Upload chưa hoàn tất: ${err.message}. Những phần đã gửi được giữ nguyên, phần chưa gửi sẽ thử lại.`;}
+    finally { state.uploadBusy=false;$('btn-start-upload').disabled=false;updateArchiveStats(); }
   }
 
   function bind() {
     $('btn-settings').addEventListener('click',()=>{ fillForm(settings); modal('settings-modal',true); });
     $('close-settings').addEventListener('click',()=>modal('settings-modal',false));
-    $('btn-sync').addEventListener('click',()=>{ $('setting-gh-repo').value=readJSON('roadsense_gh_repo_v3',''); modal('sync-modal',true); });
+    $('btn-sync').addEventListener('click',()=>{ applySyncPrefs(); updateArchiveStats(); modal('sync-modal',true); });
     $('close-sync').addEventListener('click',()=>modal('sync-modal',false));
     $('btn-theme').addEventListener('click',()=>{ settings.theme=resolvedTheme()==='dark'?'light':'dark'; writeJSON(SETTINGS_KEY,settings); applyAppearance(); });
     $('btn-gps').addEventListener('click',startGPS);
@@ -581,6 +658,7 @@
       if (!Object.hasOwn(MODES,btn.dataset.mode)) return;
       settings.mode=btn.dataset.mode;
       writeJSON(SETTINGS_KEY,settings);
+      ARCHIVE.record({kind:'mode_change',at:Date.now(),mode:settings.mode});
       scheduleRender();
     }));
     $('setting-ui-scale').addEventListener('input',e=>{ $('setting-ui-scale-val').textContent=`${e.target.value}%`; });
@@ -590,13 +668,25 @@
       const priorGPS=JSON.stringify([settings.highAccuracy,settings.gpsTimeout,settings.gpsMaxAge,settings.gpsMaxAccuracy]);
       settings=readForm();
       writeJSON(SETTINGS_KEY,settings);
+      ARCHIVE.record({kind:'settings_change',at:Date.now(),settings:{...settings}});
       applyAppearance();
       if (priorGPS!==JSON.stringify([settings.highAccuracy,settings.gpsTimeout,settings.gpsMaxAge,settings.gpsMaxAccuracy])) startGPS();
       state.nearestEvent=findUpcomingEvent();
       modal('settings-modal',false); scheduleRender();
     });
     $('btn-export').addEventListener('click',()=>exportJSON().catch(e=>$('sync-status-box').textContent=e.message));
-    $('btn-start-upload').addEventListener('click',uploadGitHub);
+    $('btn-export-csv').addEventListener('click',()=>exportCSV().catch(e=>$('sync-status-box').textContent=e.message));
+    $('btn-start-upload').addEventListener('click',()=>uploadGitHub(false));
+    $('session-gh-token').addEventListener('input',()=>{updateTokenFromInput();updateArchiveStats();});
+    ['setting-auto-sync','setting-sync-interval','setting-upload-on-stop','remember-gh-token']
+      .forEach(id=>$(id).addEventListener('change',saveSyncPrefs));
+    $('btn-clear-token').addEventListener('click',()=>{
+      tokenInSession='';$('session-gh-token').value='';localStorage.removeItem(GH_TOKEN_KEY);
+      syncPrefs.rememberToken=false;$('remember-gh-token').checked=false;
+      localStorage.setItem(SYNC_PREF_KEY,JSON.stringify(syncPrefs));
+      $('sync-status-box').textContent='Đã xóa token của RoadSense khỏi trang và bộ nhớ trình duyệt.';
+      updateArchiveStats();
+    });
     // Không đóng hộp thoại bằng cách chạm nền: tránh bấm nhầm trên màn hình nhỏ.
     document.addEventListener('keydown',e=>{ if(e.key==='Escape') { modal('settings-modal',false); modal('sync-modal',false); } });
     document.addEventListener('visibilitychange',()=>{
@@ -614,7 +704,15 @@
     fillForm(settings);
     applyAppearance();
     render();
-    initDB().catch(()=>{});
+    $('setting-gh-repo').value=GH_REPO;
+    applySyncPrefs();
+    initDB().then(async db=>{
+      await ARCHIVE.init(db,()=>updateArchiveStats());
+      state.archiveReady=true;
+      updateArchiveStats();
+      // If an upload failed before reloading, retry remaining sealed parts when token is available.
+      if(syncPrefs.auto && tokenInSession) setTimeout(()=>uploadGitHub(true),3000);
+    }).catch(err=>{state.archiveReady=false;$('sync-status-box').textContent=`Không mở được kho dữ liệu: ${err.message}`;});
     window.addEventListener('devicemotion',onMotion,{passive:true});
     beginAutoCalibration(); // Tự lấy mẫu ngay khi mở web, nếu cảm biến đã được cho phép.
     window.setTimeout(()=>{
@@ -626,9 +724,17 @@
     window.setInterval(()=>{
       if (state.gpsState==='ok' && Date.now()-state.lastGoodAt > Math.max(15000,settings.gpsTimeout*2000)) {
         state.speed=null; state.nearestEvent=null;
+        if(state.isRecording) ARCHIVE.record({kind:'gps_gap',at:Date.now(),lastGoodAt:state.lastGoodAt});
         setGps('error','Không nhận tọa độ GPS mới; kiểm tra định vị và chế độ tiết kiệm pin.');
       }
-      if (state.isRecording) saveTrip().catch(()=>{});
+      if(state.isRecording) ARCHIVE.flush(false).catch(e=>{
+        $('sync-status-box').textContent=`Không lưu được dữ liệu tạm: ${e.message}`;
+      });
+      if(state.archiveReady && syncPrefs.auto && tokenInSession && navigator.onLine && !state.uploadBusy &&
+        Date.now()-state.lastAutoSyncAt>=Number(syncPrefs.interval)*60000) {
+        state.lastAutoSyncAt=Date.now();
+        void uploadGitHub(true);
+      }
       scheduleRender();
     },15000);
     if ('serviceWorker' in navigator && window.isSecureContext) {

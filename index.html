@@ -9,6 +9,7 @@
   <link rel="icon" href="./icons/icon-192.png" type="image/png">
   <link rel="stylesheet" href="./style.css">
   <title>RoadSense • One View</title>
+  <script src="./archive.js" defer></script>
   <script src="./script.js" defer></script>
 </head>
 <body>
@@ -142,15 +143,28 @@
 
   <div id="sync-modal" class="overlay" hidden>
     <div class="modal narrow" role="dialog" aria-modal="true" aria-labelledby="sync-title">
-      <div class="modal-header"><h2 id="sync-title">⇪ Dữ liệu hành trình</h2><button id="close-sync" class="icon-btn close-btn" type="button" aria-label="Đóng dữ liệu">✕</button></div>
+      <div class="modal-header"><h2 id="sync-title">⇪ Dữ liệu & GitHub</h2><button id="close-sync" class="icon-btn close-btn" type="button" aria-label="Đóng dữ liệu">✕</button></div>
       <div class="modal-scroll sync-body">
-        <p class="helper">Dữ liệu GPS có thể tiết lộ lộ trình di chuyển. Chỉ tải lên kho GitHub mà bạn tin cậy; ưu tiên kho riêng tư.</p>
-        <button id="btn-export" class="secondary-btn full" type="button">↓ Xuất JSON xuống thiết bị</button>
-        <label class="field"><span>GitHub repository (chủ tài khoản/tên kho)</span><input id="setting-gh-repo" type="text" placeholder="username/roadsense-data" autocomplete="off"></label>
-        <label class="field"><span>Fine-grained token có quyền Contents: Read and write</span><input id="session-gh-token" type="password" placeholder="Nhập mỗi khi tải lên" autocomplete="off" spellcheck="false"></label>
-        <p class="helper">Token chỉ giữ trong phiên hiển thị, không ghi vào localStorage hoặc file xuất.</p>
-        <button id="btn-start-upload" class="primary-btn full" type="button">Tải dữ liệu thật lên GitHub</button>
-        <p id="sync-status-box" class="diagnostics" role="status" aria-live="polite">Chưa có tác vụ đồng bộ.</p>
+        <p class="helper">Bạn có thể Upload bất cứ lúc nào sau khi nhấn BẮT ĐẦU, kể cả khi chưa DỪNG GHI. Ghi hành trình không bị ngắt khi đồng bộ.</p>
+        <label class="field"><span>Repository đã cấu hình</span><input id="setting-gh-repo" type="text" value="gptlohoi-del/RoadSense2" readonly aria-readonly="true"></label>
+        <a class="repo-link" href="https://github.com/gptlohoi-del/RoadSense2" target="_blank" rel="noopener noreferrer">Mở repository trên GitHub ↗</a>
+        <label class="field"><span>GitHub Fine-grained Token — quyền Contents: Read and write</span>
+          <input id="session-gh-token" type="password" placeholder="Dán token của bạn tại đây" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
+        <label class="check-row"><input id="remember-gh-token" type="checkbox"><span>Ghi nhớ token trên điện thoại này <strong>(kém an toàn hơn)</strong></span></label>
+        <p class="helper">Mặc định token chỉ giữ tới khi tải lại web. Nếu bật ghi nhớ, token sẽ được lưu <b>không mã hóa</b> trong trình duyệt; chỉ bật trên máy cá nhân đáng tin cậy và dùng token giới hạn riêng cho RoadSense2. Token không được đưa lên GitHub hoặc vào tệp hành trình.</p>
+        <button id="btn-clear-token" class="secondary-btn full" type="button">Xóa token đã lưu trên thiết bị</button>
+        <fieldset><legend>Đồng bộ GitHub (phương án C)</legend>
+          <label class="check-row"><input id="setting-auto-sync" type="checkbox" checked><span>Tự động đồng bộ khi đang ghi và có kết nối</span></label>
+          <label class="field"><span>Khoảng thời gian tự đồng bộ (phút)</span><select id="setting-sync-interval"><option value="2">2 phút</option><option value="3">3 phút</option><option value="5">5 phút</option><option value="10">10 phút</option><option value="15">15 phút</option></select></label>
+          <label class="check-row"><input id="setting-upload-on-stop" type="checkbox" checked><span>Thử Upload dữ liệu còn lại sau khi nhấn DỪNG GHI</span></label>
+          <p class="helper">Nếu mất mạng hoặc trang bị hệ điều hành tạm dừng, dữ liệu vẫn được lưu trong IndexedDB và sẽ tiếp tục đồng bộ khi bạn mở web và có token.</p>
+        </fieldset>
+        <p id="archive-stats" class="diagnostics" aria-live="polite">Đang kiểm tra dữ liệu cục bộ…</p>
+        <button id="btn-start-upload" class="primary-btn full" type="button">☁ UPLOAD NGAY (không dừng ghi)</button>
+        <a id="last-upload-link" class="repo-link" href="https://github.com/gptlohoi-del/RoadSense2" target="_blank" rel="noopener noreferrer" hidden>Xem dữ liệu đã tải lên ↗</a>
+        <button id="btn-export" class="secondary-btn full" type="button">↓ Sao lưu toàn bộ dữ liệu JSON (gồm dữ liệu v4)</button>
+        <button id="btn-export-csv" class="secondary-btn full" type="button">↓ Xuất CSV tọa độ để kiểm tra bằng Excel</button>
+        <p id="sync-status-box" class="diagnostics" role="status" aria-live="polite">Chưa đồng bộ.</p>
       </div>
     </div>
   </div>
