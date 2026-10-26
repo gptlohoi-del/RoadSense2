@@ -18,7 +18,7 @@
   const STORE_NAME = 'trips';
   const G = 9.80665;
   const DEFAULTS = Object.freeze({
-    theme: 'auto', heroColor: '#fff8e3', fontSize: 'normal', recSpeedSize: 100, gpsSpeedSize: 100, uiScale: 100, mode: 'balanced',
+    theme: 'auto', heroColor: '#fffbf0', fontSize: 'normal', recSpeedSize: 100, gpsSpeedSize: 100, uiScale: 100, mode: 'balanced',
     baseSpeed: 50, minSpeed: 15, maxSpeed: 90, lateralAccel: 1.6,
     vibrationThreshold: 0.35, vibrationPenalty: 15, warningRadius: 150,
     rememberBumps: true, highAccuracy: true, gpsTimeout: 15,
